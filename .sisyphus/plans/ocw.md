@@ -642,7 +642,7 @@ Wave 6 (Polish + Post-MVP):
 
 ### WAVE 3: Workspace Engine
 
-- [ ] 5. Workspace Manager (Instance Lifecycle)
+- [x] 5. Workspace Manager (Instance Lifecycle)
 
   **What to do**:
   - Create `internal/workspace/manager.go`:
@@ -819,7 +819,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 7. IDE Launcher
+- [x] 7. IDE Launcher
 
   **What to do**:
   - Create `internal/ide/launcher.go`:
