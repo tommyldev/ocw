@@ -68,6 +68,12 @@ func (s *Store) Load() (*State, error) {
 	statePath := s.statePath()
 	lockPath := s.lockPath()
 
+	// Ensure .ocw directory exists (needed for lock file)
+	ocwDir := filepath.Join(s.dir, ".ocw")
+	if err := os.MkdirAll(ocwDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create .ocw directory: %w", err)
+	}
+
 	// Create lock
 	lock := flock.New(lockPath)
 	if err := lock.RLock(); err != nil {

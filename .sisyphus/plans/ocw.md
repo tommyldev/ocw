@@ -1744,7 +1744,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 18. Tests for Core Logic
+- [x] 18. Tests for Core Logic
 
   **What to do**:
   - Add Go tests for core business logic (NOT TUI):
