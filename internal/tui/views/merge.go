@@ -25,6 +25,11 @@ type MergeConflictCheckMsg struct {
 	Error         error
 }
 
+// ResolveConflictsRequestMsg requests conflict resolution flow
+type ResolveConflictsRequestMsg struct {
+	InstanceID string
+}
+
 // Merge is the view for merging branches and creating PRs
 type Merge struct {
 	instance          state.Instance
@@ -187,6 +192,10 @@ func (m *Merge) SetSize(width, height int) {
 	}
 }
 
+func (m *Merge) GetConflictFiles() []string {
+	return m.conflictFiles
+}
+
 // Update handles messages
 func (m *Merge) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -221,8 +230,13 @@ func (m *Merge) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "esc":
-			// Cancel and return to dashboard
 			return m, nil
+		case "c":
+			if m.hasConflicts {
+				return m, func() tea.Msg {
+					return ResolveConflictsRequestMsg{InstanceID: m.instance.ID}
+				}
+			}
 		}
 	}
 
@@ -316,7 +330,7 @@ func (m *Merge) renderConflicts() string {
 		conflictList.WriteString(fmt.Sprintf("  • %s\n", file))
 	}
 
-	help := m.styles.Help.Render("Resolve conflicts in your worktree before merging. Press ESC to go back.")
+	help := m.styles.Help.Render("Press 'c' to resolve conflicts | ESC to go back")
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,

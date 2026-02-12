@@ -236,6 +236,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.err = msg.Error
 		}
 		return a, nil
+	case views.ResolveConflictsRequestMsg:
+		return a, a.resolveConflictsCmd(msg.InstanceID)
 	}
 
 	// Delegate to current view
@@ -649,6 +651,61 @@ func (a *App) sendPromptCmd(instanceID, promptText string) tea.Cmd {
 		}
 
 		return SendPromptMsg{Success: true, Error: nil}
+	}
+}
+
+func (a *App) resolveConflictsCmd(instanceID string) tea.Cmd {
+	return func() tea.Msg {
+		if a.ctx.Manager == nil {
+			return FocusCompleteMsg{Error: fmt.Errorf("manager not available")}
+		}
+
+		var instance *state.Instance
+		for i := range a.instances {
+			if a.instances[i].ID == instanceID {
+				instance = &a.instances[i]
+				break
+			}
+		}
+
+		if instance == nil {
+			return FocusCompleteMsg{Error: fmt.Errorf("instance not found")}
+		}
+
+		sessionName, err := a.ctx.Manager.EnsureSession()
+		if err != nil {
+			return FocusCompleteMsg{Error: fmt.Errorf("failed to get session name: %w", err)}
+		}
+
+		if a.program == nil {
+			return FocusCompleteMsg{Error: fmt.Errorf("program not available")}
+		}
+
+		if err := a.program.ReleaseTerminal(); err != nil {
+			return FocusCompleteMsg{Error: fmt.Errorf("failed to release terminal: %w", err)}
+		}
+
+		err = a.ctx.Manager.Tmux().AttachWindow(sessionName, instance.TmuxWindow)
+
+		if restoreErr := a.program.RestoreTerminal(); restoreErr != nil {
+			return FocusCompleteMsg{Error: fmt.Errorf("failed to restore terminal: %w", restoreErr)}
+		}
+
+		if err != nil {
+			return FocusCompleteMsg{Error: err}
+		}
+
+		if a.merge != nil {
+			conflictFiles := a.merge.GetConflictFiles()
+			if len(conflictFiles) > 0 {
+				prompt := fmt.Sprintf("Please resolve the merge conflicts in the following files: %v", conflictFiles)
+				if sendErr := a.ctx.Manager.Tmux().SendKeys(instance.PrimaryPane, prompt); sendErr != nil {
+					return FocusCompleteMsg{Error: fmt.Errorf("focused successfully but failed to send prompt: %w", sendErr)}
+				}
+			}
+		}
+
+		return FocusCompleteMsg{Error: nil}
 	}
 }
 

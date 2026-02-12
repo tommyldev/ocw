@@ -1958,7 +1958,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 27. Conflict Resolution Assistant
+- [x] 27. Conflict Resolution Assistant
 
   **What to do**:
   - When conflicts detected, offer to launch OpenCode in the conflicting worktree with a prompt to fix conflicts
