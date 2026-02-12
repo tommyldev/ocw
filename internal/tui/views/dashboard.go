@@ -78,18 +78,30 @@ func (d *CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	elapsedStr := formatDuration(elapsed)
 
 	subTermCount := len(inst.SubTerminals)
+	subTermStr := fmt.Sprintf("%d sub-terms", subTermCount)
+	if subTermCount > 0 {
+		labeledCount := 0
+		for _, st := range inst.SubTerminals {
+			if st.Label != "" {
+				labeledCount++
+			}
+		}
+		if labeledCount > 0 {
+			subTermStr = fmt.Sprintf("%d sub-terms (%d labeled)", subTermCount, labeledCount)
+		}
+	}
 
 	conflictStr := ""
 	if len(inst.ConflictsWith) > 0 {
 		conflictStr = " ⚠"
 	}
 
-	firstLine := fmt.Sprintf("%d. %s %s | %s | %d sub-terms%s",
+	firstLine := fmt.Sprintf("%d. %s %s | %s | %s%s",
 		index+1,
 		statusStyle.Render(statusIcon),
 		inst.Name,
 		elapsedStr,
-		subTermCount,
+		subTermStr,
 		conflictStr,
 	)
 

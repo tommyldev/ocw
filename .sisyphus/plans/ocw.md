@@ -1905,7 +1905,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 24. Named/Labeled Sub-Terminals with Quick-Switch
+- [x] 24. Named/Labeled Sub-Terminals with Quick-Switch
 
   **What to do**:
   - Enhance sub-terminal creation to accept optional label
@@ -2028,7 +2028,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 31. README & Documentation
+- [x] 31. README & Documentation
 
   **What to do**:
   - Create README.md with:

@@ -116,6 +116,7 @@ func (h *Help) buildContent() string {
 		{"d", "Delete selected instance"},
 		{"f", "Show diff for selected instance"},
 		{"m", "Merge selected instance"},
+		{"t", "Show sub-terminals for selected instance"},
 		{"r", "Refresh instances"},
 		{"enter", "Focus on selected instance"},
 		{"1-9", "Quick focus on instance 1-9"},

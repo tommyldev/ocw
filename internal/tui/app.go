@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -14,15 +15,16 @@ import (
 type AppState string
 
 const (
-	StateDashboard     AppState = "dashboard"
-	StateDetail        AppState = "detail"
-	StateCreate        AppState = "create"
-	StateHelp          AppState = "help"
-	StateDiff          AppState = "diff"
-	StateMerge         AppState = "merge"
-	StateDeleteConfirm AppState = "delete-confirm"
-	StateLog           AppState = "log"
-	StateSendPrompt    AppState = "send-prompt"
+	StateDashboard       AppState = "dashboard"
+	StateDetail          AppState = "detail"
+	StateCreate          AppState = "create"
+	StateHelp            AppState = "help"
+	StateDiff            AppState = "diff"
+	StateMerge           AppState = "merge"
+	StateDeleteConfirm   AppState = "delete-confirm"
+	StateLog             AppState = "log"
+	StateSendPrompt      AppState = "send-prompt"
+	StateSubTerminalList AppState = "subterminal-list"
 )
 
 // FocusMsg is sent when user wants to focus on an instance
@@ -49,27 +51,28 @@ type SendPromptMsg struct {
 
 // App is the root Bubbletea model
 type App struct {
-	ctx                *Context
-	state              AppState
-	keyMap             KeyMap
-	styles             Styles
-	instances          []state.Instance
-	selected           int
-	width              int
-	height             int
-	dashboard          *views.Dashboard
-	create             *views.Create
-	diff               *views.Diff
-	merge              *views.Merge
-	help               *views.Help
-	log                *views.Log
-	err                error
-	program            *tea.Program
-	deleteInstanceID   string
-	deleteInstanceName string
-	promptInstanceID   string
-	promptText         string
-	promptFeedback     string
+	ctx                   *Context
+	state                 AppState
+	keyMap                KeyMap
+	styles                Styles
+	instances             []state.Instance
+	selected              int
+	width                 int
+	height                int
+	dashboard             *views.Dashboard
+	create                *views.Create
+	diff                  *views.Diff
+	merge                 *views.Merge
+	help                  *views.Help
+	log                   *views.Log
+	err                   error
+	program               *tea.Program
+	deleteInstanceID      string
+	deleteInstanceName    string
+	promptInstanceID      string
+	promptText            string
+	promptFeedback        string
+	subTerminalInstanceID string
 }
 
 func NewApp(ctx *Context) *App {
@@ -328,6 +331,8 @@ func (a *App) View() string {
 		return a.renderDeleteConfirm()
 	case StateSendPrompt:
 		return a.renderSendPrompt()
+	case StateSubTerminalList:
+		return a.renderSubTerminalList()
 	default:
 		return "Unknown state"
 	}
@@ -438,6 +443,16 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 		}
+	case "t", "T":
+		if a.state == StateDashboard && a.dashboard != nil {
+			selectedIdx := a.dashboard.GetSelectedIndex()
+			if selectedIdx >= 0 && selectedIdx < len(a.instances) {
+				selectedInstance := a.instances[selectedIdx]
+				a.subTerminalInstanceID = selectedInstance.ID
+				a.state = StateSubTerminalList
+				return a, nil
+			}
+		}
 	case "enter":
 		if a.state == StateSendPrompt {
 			if a.promptText != "" {
@@ -480,6 +495,10 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		if a.state == StateSendPrompt {
+			a.state = StateDashboard
+			return a, nil
+		}
+		if a.state == StateSubTerminalList {
 			a.state = StateDashboard
 			return a, nil
 		}
@@ -642,4 +661,55 @@ func (a *App) renderSendPrompt() string {
 		feedback = "\n\n" + a.styles.StatusActiveStyle.Render(a.promptFeedback)
 	}
 	return fmt.Sprintf("%s\n\n%s\n\n%s%s", title, textBox, help, feedback)
+}
+
+func (a *App) renderSubTerminalList() string {
+	var instance *state.Instance
+	for i := range a.instances {
+		if a.instances[i].ID == a.subTerminalInstanceID {
+			instance = &a.instances[i]
+			break
+		}
+	}
+
+	if instance == nil {
+		return a.styles.ErrorText.Render("Instance not found")
+	}
+
+	title := a.styles.Header.Render(fmt.Sprintf("Sub-Terminals for %s", instance.Name))
+
+	var content string
+	if len(instance.SubTerminals) == 0 {
+		content = a.styles.Footer.Render("No sub-terminals created yet")
+	} else {
+		content = ""
+		for i, st := range instance.SubTerminals {
+			label := st.Label
+			if label == "" {
+				label = "(unlabeled)"
+			}
+			elapsed := time.Since(st.CreatedAt)
+			elapsedStr := formatDuration(elapsed)
+			line := fmt.Sprintf("%d. %s | Pane: %s | Created: %s ago\n",
+				i+1, label, st.PaneID, elapsedStr)
+			content += line
+		}
+	}
+
+	help := a.styles.Footer.Render("ESC: Return to dashboard")
+
+	return fmt.Sprintf("%s\n\n%s\n\n%s", title, content, help)
+}
+
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	}
+	if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	}
+	if d < 24*time.Hour {
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+	return fmt.Sprintf("%dd", int(d.Hours()/24))
 }
