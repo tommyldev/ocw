@@ -1265,7 +1265,7 @@ Wave 6 (Polish + Post-MVP):
 
 ### WAVE 5: Integration
 
-- [ ] 12. Focus View (Instance View with ReleaseTerminal)
+- [x] 12. Focus View (Instance View with ReleaseTerminal)
 
   **What to do**:
   - Create `internal/tui/views/instance.go`:
@@ -1510,7 +1510,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 15. CLI Subcommands (All Remaining)
+- [x] 15. CLI Subcommands (All Remaining)
 
   **What to do**:
   - Create cobra commands for all remaining CLI subcommands:

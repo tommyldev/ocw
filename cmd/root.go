@@ -17,11 +17,69 @@ var rootCmd = &cobra.Command{
 	Short: "OCW - Open Code Workspace",
 	Long:  "OCW is a terminal-based workspace manager for open source development",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := runTUI(); err != nil {
+		if err := runDefault(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 	},
+}
+
+// runDefault implements the default command behavior:
+// - If OCW tmux session exists, re-attach to it
+// - Otherwise, create new session and launch TUI
+func runDefault() error {
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	// Find git repository root
+	repoRoot := cwd
+	for {
+		if _, err := os.Stat(filepath.Join(repoRoot, ".git")); err == nil {
+			break
+		}
+		parent := filepath.Dir(repoRoot)
+		if parent == repoRoot {
+			return fmt.Errorf("not in a git repository; run 'ocw init' in a git repository")
+		}
+		repoRoot = parent
+	}
+
+	// Check if .ocw exists
+	ocwDir := filepath.Join(repoRoot, ".ocw")
+	if _, err := os.Stat(ocwDir); os.IsNotExist(err) {
+		return fmt.Errorf(".ocw directory not found; run 'ocw init' first")
+	}
+
+	// Load configuration
+	cfg, err := config.LoadConfig(repoRoot)
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+
+	// Create workspace manager
+	mgr, err := workspace.NewManager(repoRoot, cfg)
+	if err != nil {
+		return fmt.Errorf("failed to create workspace manager: %w", err)
+	}
+
+	// Check if session exists
+	sessionName := mgr.SessionName()
+	if mgr.Tmux().HasSession(sessionName) {
+		// Re-attach to existing session
+		fmt.Printf("Attaching to existing OCW session: %s\n", sessionName)
+		return mgr.Tmux().AttachSession(sessionName)
+	}
+
+	// Create new session and launch TUI
+	_, err = mgr.EnsureSession()
+	if err != nil {
+		return fmt.Errorf("failed to create tmux session: %w", err)
+	}
+
+	return runTUI()
 }
 
 // runTUI launches the Bubbletea TUI application
