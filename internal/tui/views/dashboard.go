@@ -200,6 +200,10 @@ func (d *Dashboard) SetSize(width, height int) {
 	d.list.SetHeight(height - 6)
 }
 
+func (d *Dashboard) GetSelectedIndex() int {
+	return d.list.Index()
+}
+
 func (d *Dashboard) Init() tea.Cmd {
 	d.refreshTicker = time.NewTicker(1500 * time.Millisecond)
 	d.conflictTicker = time.NewTicker(30 * time.Second)

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tommyzliu/ocw/internal/git"
 	"github.com/tommyzliu/ocw/internal/state"
 	"github.com/tommyzliu/ocw/internal/tui/views"
 )
@@ -16,6 +17,7 @@ const (
 	StateDetail    AppState = "detail"
 	StateCreate    AppState = "create"
 	StateHelp      AppState = "help"
+	StateDiff      AppState = "diff"
 )
 
 // App is the root Bubbletea model
@@ -30,6 +32,7 @@ type App struct {
 	height    int
 	dashboard *views.Dashboard
 	create    *views.Create
+	diff      *views.Diff
 	err       error
 }
 
@@ -102,6 +105,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.create != nil {
 			a.create.SetSize(msg.Width, msg.Height)
 		}
+		if a.diff != nil {
+			a.diff.SetSize(msg.Width, msg.Height)
+		}
 		return a, nil
 	case views.CreateMsg:
 		// Handle create completion
@@ -112,6 +118,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Success - return to dashboard
 		a.state = StateDashboard
 		return a.refreshInstances()
+	case views.DiffLoadedMsg:
+		// Handle diff loaded message
+		if a.diff != nil {
+			model, cmd := a.diff.Update(msg)
+			a.diff = model.(*views.Diff)
+			return a, cmd
+		}
 	}
 
 	// Delegate to current view
@@ -126,6 +139,17 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.create != nil {
 			model, cmd := a.create.Update(msg)
 			a.create = model.(*views.Create)
+			return a, cmd
+		}
+	case StateDiff:
+		if a.diff != nil {
+			model, cmd := a.diff.Update(msg)
+			a.diff = model.(*views.Diff)
+			// Check if ESC was pressed to return to dashboard
+			if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "esc" {
+				a.state = StateDashboard
+				return a, nil
+			}
 			return a, cmd
 		}
 	}
@@ -148,6 +172,11 @@ func (a *App) View() string {
 	case StateCreate:
 		if a.create != nil {
 			return a.create.View()
+		}
+		return "Loading..."
+	case StateDiff:
+		if a.diff != nil {
+			return a.diff.View()
 		}
 		return "Loading..."
 	case StateHelp:
@@ -192,6 +221,18 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.create = views.NewCreate(a.ctx.Manager, defaultBase, createStyles)
 			a.create.SetSize(a.width, a.height)
 			return a, nil
+		}
+	case "f":
+		if a.state == StateDashboard && a.dashboard != nil {
+			selectedIdx := a.dashboard.GetSelectedIndex()
+			if selectedIdx >= 0 && selectedIdx < len(a.instances) {
+				selectedInstance := a.instances[selectedIdx]
+				gitMgr := git.NewGit(selectedInstance.WorktreePath)
+				a.diff = views.NewDiff(selectedInstance, gitMgr)
+				a.diff.SetSize(a.width, a.height)
+				a.state = StateDiff
+				return a, a.diff.Init()
+			}
 		}
 	case "esc":
 		if a.state == StateCreate {

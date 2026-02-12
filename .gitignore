@@ -2,3 +2,4 @@ ocw
 .ocw/
 .worktrees/
 *.test
+.sisyphus
