@@ -1193,7 +1193,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 11. Conflict Detection
+- [x] 11. Conflict Detection
 
   **What to do**:
   - Create `internal/workspace/conflicts.go`:
