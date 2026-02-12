@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/tommyzliu/ocw/internal/git"
 	"github.com/tommyzliu/ocw/internal/state"
 	"github.com/tommyzliu/ocw/internal/tui/views"
@@ -52,6 +53,7 @@ type App struct {
 	create             *views.Create
 	diff               *views.Diff
 	merge              *views.Merge
+	help               *views.Help
 	err                error
 	program            *tea.Program
 	deleteInstanceID   string
@@ -104,6 +106,17 @@ func NewApp(ctx *Context) *App {
 	}
 	app.create = views.NewCreate(ctx.Manager, defaultBase, createStyles)
 
+	helpStyles := views.HelpStyles{
+		Title:     app.styles.Header,
+		Header:    app.styles.SelectedItem,
+		Border:    app.styles.FocusedBorder,
+		Text:      lipgloss.NewStyle(),
+		Highlight: app.styles.SelectedItem,
+		Footer:    app.styles.Footer,
+	}
+	app.help = views.NewHelp(helpStyles)
+	app.help.SetSize(app.width, app.height)
+
 	return app
 }
 
@@ -138,6 +151,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if a.merge != nil {
 			a.merge.SetSize(msg.Width, msg.Height)
+		}
+		if a.help != nil {
+			a.help.SetSize(msg.Width, msg.Height)
 		}
 		return a, nil
 	case views.CreateMsg:
@@ -259,7 +275,10 @@ func (a *App) View() string {
 		}
 		return "Loading..."
 	case StateHelp:
-		return a.renderHelp()
+		if a.help != nil {
+			return a.help.View()
+		}
+		return "Loading..."
 	case StateDeleteConfirm:
 		return a.renderDeleteConfirm()
 	default:
@@ -372,6 +391,10 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.state = StateDashboard
 			return a, nil
 		}
+		if a.state == StateHelp {
+			a.state = StateDashboard
+			return a, nil
+		}
 	case "y":
 		if a.state == StateDeleteConfirm {
 			return a, a.deleteInstanceCmd(a.deleteInstanceID)
@@ -390,6 +413,12 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if a.create != nil {
 			model, cmd := a.create.Update(msg)
 			a.create = model.(*views.Create)
+			return a, cmd
+		}
+	case StateHelp:
+		if a.help != nil {
+			model, cmd := a.help.Update(msg)
+			a.help = model.(*views.Help)
 			return a, cmd
 		}
 	}
@@ -470,22 +499,6 @@ func (a *App) deleteInstanceCmd(instanceID string) tea.Cmd {
 
 		return DeleteMsg{Success: true, Error: nil}
 	}
-}
-
-// renderHelp renders the help screen
-func (a *App) renderHelp() string {
-	help := "OCW - Open Code Workspace\n\n"
-	help += "Key Bindings:\n"
-	help += fmt.Sprintf("  %s - %s\n", "↑/k", "move up")
-	help += fmt.Sprintf("  %s - %s\n", "↓/j", "move down")
-	help += fmt.Sprintf("  %s - %s\n", "enter", "select")
-	help += fmt.Sprintf("  %s - %s\n", "n", "new instance")
-	help += fmt.Sprintf("  %s - %s\n", "d", "delete instance")
-	help += fmt.Sprintf("  %s - %s\n", "r", "refresh")
-	help += fmt.Sprintf("  %s - %s\n", "?", "toggle help")
-	help += fmt.Sprintf("  %s - %s\n", "ctrl+c/q", "quit")
-	help += "\nPress ? to close help"
-	return help
 }
 
 func (a *App) renderDeleteConfirm() string {

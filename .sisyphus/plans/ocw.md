@@ -1809,7 +1809,7 @@ Wave 6 (Polish + Post-MVP):
 
 ### POST-MVP FEATURES
 
-- [ ] 19. Help View
+- [x] 19. Help View
 
   **What to do**:
   - Create `internal/tui/views/help.go`:
