@@ -2010,7 +2010,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 30. `ocw watch` — Auto-Create from Task Queue
+- [x] 30. `ocw watch` — Auto-Create from Task Queue
 
   **What to do**:
   - `ocw watch <file>` — reads a YAML/JSON file of tasks
