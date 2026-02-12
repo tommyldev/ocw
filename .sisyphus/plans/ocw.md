@@ -1040,7 +1040,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 9. Sub-Terminal Management
+- [x] 9. Sub-Terminal Management
 
   **What to do**:
   - Create `internal/workspace/subterminal.go`:
