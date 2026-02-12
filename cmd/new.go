@@ -66,7 +66,7 @@ var newCmd = &cobra.Command{
 
 		instance, err := mgr.CreateInstance(opts)
 		if err != nil {
-			return fmt.Errorf("failed to create instance: %w", err)
+			return err
 		}
 
 		// Print success message

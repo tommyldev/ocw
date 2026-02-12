@@ -27,26 +27,35 @@ func NewLauncher(cfg config.EditorConfig, tmuxInstance *tmux.Tmux) *Launcher {
 // DetectEditor returns the editor command to use, following this priority order:
 // 1. config.Command (if set)
 // 2. $EDITOR environment variable
-// 3. Probe for: cursor, code, zed, nvim, vim, vi
+// 3. Probe for GUI editors (if not headless): cursor, code, zed
+// 4. Probe for terminal editors: nvim, vim, vi
 // Returns empty string if no editor is found.
 func (l *Launcher) DetectEditor() string {
-	// 1. Check config.Command
 	if l.config.Command != "" {
 		if l.commandExists(l.config.Command) {
 			return l.config.Command
 		}
 	}
 
-	// 2. Check $EDITOR environment variable
 	if editor := os.Getenv("EDITOR"); editor != "" {
 		if l.commandExists(editor) {
 			return editor
 		}
 	}
 
-	// 3. Probe for common editors in order
-	probeOrder := []string{"cursor", "code", "zed", "nvim", "vim", "vi"}
-	for _, editor := range probeOrder {
+	isHeadless := l.DetectHeadless()
+
+	if !isHeadless {
+		guiEditors := []string{"cursor", "code", "zed"}
+		for _, editor := range guiEditors {
+			if l.commandExists(editor) {
+				return editor
+			}
+		}
+	}
+
+	terminalEditors := []string{"nvim", "vim", "vi"}
+	for _, editor := range terminalEditors {
 		if l.commandExists(editor) {
 			return editor
 		}
@@ -80,42 +89,44 @@ func (l *Launcher) IsTerminalEditor(editor string) bool {
 func (l *Launcher) Open(worktreePath, tmuxTarget string) error {
 	editor := l.DetectEditor()
 	if editor == "" {
-		return fmt.Errorf("no editor found; set EDITOR env var or configure editor.command in .ocw/config.toml")
+		isHeadless := l.DetectHeadless()
+		if isHeadless {
+			return fmt.Errorf("no editor found\n\nRunning in headless environment (SSH/no display).\n\nTo fix:\n  1. Set EDITOR environment variable: export EDITOR=vim\n  2. Or configure in .ocw/config.toml: editor.command = \"nvim\"\n  3. Install a terminal editor: apt/brew install vim")
+		}
+		return fmt.Errorf("no editor found\n\nTo fix:\n  1. Set EDITOR environment variable: export EDITOR=code\n  2. Or configure in .ocw/config.toml: editor.command = \"cursor\"\n  3. Install an editor: cursor, vscode, vim, etc.")
 	}
 
 	if l.IsTerminalEditor(editor) {
-		// Terminal editor: launch in tmux pane
 		return l.openTerminalEditor(editor, worktreePath, tmuxTarget)
 	}
 
-	// GUI editor: launch detached
+	if l.DetectHeadless() {
+		return fmt.Errorf("GUI editor %q cannot run in headless environment\n\nRunning over SSH or without display server.\n\nTo fix:\n  1. Use a terminal editor instead: export EDITOR=vim\n  2. Or use SSH X11 forwarding: ssh -X\n  3. Or run OCW directly on the machine", editor)
+	}
+
 	return l.openGUIEditor(editor, worktreePath)
 }
 
 // openGUIEditor launches a GUI editor detached from the current process.
 func (l *Launcher) openGUIEditor(editor, worktreePath string) error {
 	cmd := exec.Command(editor, worktreePath)
-	// Detach from current process
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to launch GUI editor %q: %w", editor, err)
+		return fmt.Errorf("failed to launch GUI editor %q: %w\n\nTo fix:\n  1. Verify editor is installed: which %s\n  2. Check editor is in PATH: echo $PATH\n  3. Try running manually: %s %s", editor, err, editor, editor, worktreePath)
 	}
 
-	// Don't wait for the process; it runs independently
 	return nil
 }
 
 // openTerminalEditor launches a terminal editor in a new tmux pane.
 func (l *Launcher) openTerminalEditor(editor, worktreePath, tmuxTarget string) error {
-	// Send the editor command to the tmux pane
-	// Format: tmux send-keys -t <target> "<editor> <path>" Enter
 	cmd := fmt.Sprintf("%s %s", editor, worktreePath)
 
 	if err := l.tmux.SendKeys(tmuxTarget, cmd); err != nil {
-		return fmt.Errorf("failed to launch terminal editor %q in tmux: %w", editor, err)
+		return fmt.Errorf("failed to launch terminal editor %q in tmux: %w\n\nTo fix:\n  1. Verify editor is installed: which %s\n  2. Check tmux target exists: tmux list-panes -t %s\n  3. Try running editor manually in the pane", editor, err, editor, tmuxTarget)
 	}
 
 	return nil

@@ -1668,7 +1668,7 @@ Wave 6 (Polish + Post-MVP):
 
 ### WAVE 6: Polish & Post-MVP
 
-- [ ] 17. Edge Cases & Error Handling Polish
+- [x] 17. Edge Cases & Error Handling Polish
 
   **What to do**:
   - Implement all edge cases from spec:

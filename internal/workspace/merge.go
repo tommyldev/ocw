@@ -30,13 +30,11 @@ func (m *Manager) DetectPRTool() (string, error) {
 // PushBranch pushes the branch for the specified instance to the remote repository.
 // It uses "origin" as the default remote.
 func (m *Manager) PushBranch(instanceID string) error {
-	// Load state to get instance details
 	stateData, err := m.store.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load state: %w", err)
 	}
 
-	// Find instance
 	var instance *state.Instance
 	for i := range stateData.Instances {
 		if stateData.Instances[i].ID == instanceID {
@@ -49,9 +47,29 @@ func (m *Manager) PushBranch(instanceID string) error {
 		return fmt.Errorf("instance not found: %s", instanceID)
 	}
 
-	// Push the branch
+	remotes, err := m.git.GetRemotes()
+	if err != nil {
+		return fmt.Errorf("failed to check git remotes: %w", err)
+	}
+
+	if len(remotes) == 0 {
+		return fmt.Errorf("no git remote configured\n\nCannot push branch %q without a remote repository.\n\nTo fix:\n  1. Add a remote: git remote add origin <repository-url>\n  2. Verify: git remote -v", instance.Branch)
+	}
+
+	hasOrigin := false
+	for _, remote := range remotes {
+		if remote == "origin" {
+			hasOrigin = true
+			break
+		}
+	}
+
+	if !hasOrigin {
+		return fmt.Errorf("remote 'origin' not found\n\nAvailable remotes: %s\n\nTo fix:\n  1. Add origin remote: git remote add origin <repository-url>\n  2. Or rename existing remote: git remote rename %s origin", strings.Join(remotes, ", "), remotes[0])
+	}
+
 	if err := m.git.Push("origin", instance.Branch); err != nil {
-		return fmt.Errorf("failed to push branch %s: %w", instance.Branch, err)
+		return fmt.Errorf("failed to push branch %q to origin: %w\n\nTo fix:\n  1. Ensure you have push access to the repository\n  2. Check your authentication: git config --list | grep credential\n  3. Try manual push: git push origin %s", instance.Branch, err, instance.Branch)
 	}
 
 	return nil

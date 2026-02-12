@@ -12,7 +12,6 @@ import (
 // Second sub-terminal: vertical split (-h flag in bottom area)
 // Returns the new pane ID.
 func (m *Manager) CreateSubTerminal(instanceID, label string) (string, error) {
-	// Load instance from state
 	inst, err := m.GetInstance(instanceID)
 	if err != nil {
 		return "", fmt.Errorf("failed to get instance: %w", err)
@@ -22,8 +21,12 @@ func (m *Manager) CreateSubTerminal(instanceID, label string) (string, error) {
 		return "", fmt.Errorf("instance %q not found", instanceID)
 	}
 
-	// Count existing sub-terminals
 	count := len(inst.SubTerminals)
+
+	const maxPanes = 6
+	if count >= maxPanes {
+		return "", fmt.Errorf("maximum sub-terminals reached (%d/%d)\n\nToo many panes can make the terminal difficult to use.\n\nTo fix:\n  1. Close unused sub-terminals first\n  2. Or use a larger terminal window\n  3. Consider using tmux windows instead of panes", count, maxPanes)
+	}
 
 	// Determine split direction and percentage
 	var split string

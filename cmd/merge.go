@@ -62,7 +62,7 @@ var mergeCmd = &cobra.Command{
 		}
 
 		if instance == nil {
-			return fmt.Errorf("instance not found: %s", idOrName)
+			return fmt.Errorf("instance %q not found\n\nTo fix:\n  1. List all instances: ocw list\n  2. Use the correct instance ID or name", idOrName)
 		}
 
 		gitMgr := git.NewGit(instance.WorktreePath)
@@ -71,7 +71,7 @@ var mergeCmd = &cobra.Command{
 		fmt.Printf("Checking for conflicts...\n")
 		hasConflicts, conflictFiles, err := conflictDetector.CheckMergeConflicts(*instance)
 		if err != nil {
-			return fmt.Errorf("failed to check merge conflicts: %w", err)
+			return fmt.Errorf("failed to check merge conflicts: %w\n\nTo fix:\n  1. Ensure base branch exists: git branch -a | grep %s\n  2. Fetch latest changes: git fetch\n  3. Verify git repository is valid", err, instance.BaseBranch)
 		}
 
 		if hasConflicts {
@@ -80,7 +80,7 @@ var mergeCmd = &cobra.Command{
 			for _, file := range conflictFiles {
 				fmt.Printf("  • %s\n", file)
 			}
-			return fmt.Errorf("resolve conflicts before merging")
+			return fmt.Errorf("resolve conflicts before merging\n\nTo fix:\n  1. Rebase onto %s: git rebase %s\n  2. Or merge manually: git merge %s\n  3. Resolve conflicts and commit changes", instance.BaseBranch, instance.BaseBranch, instance.BaseBranch)
 		}
 
 		fmt.Printf("✓ No conflicts detected\n\n")
@@ -92,7 +92,7 @@ var mergeCmd = &cobra.Command{
 
 		fmt.Printf("Pushing branch %s to origin...\n", instance.Branch)
 		if err := mgr.PushBranch(instance.ID); err != nil {
-			return fmt.Errorf("failed to push branch: %w", err)
+			return err
 		}
 
 		fmt.Printf("✓ Branch pushed\n\n")
@@ -103,7 +103,7 @@ var mergeCmd = &cobra.Command{
 
 		prURL, err := mgr.CreatePR(instance.ID, prTitle, "")
 		if err != nil {
-			return fmt.Errorf("failed to create PR: %w", err)
+			return err
 		}
 
 		fmt.Printf("\n✓ Pull request created successfully!\n")

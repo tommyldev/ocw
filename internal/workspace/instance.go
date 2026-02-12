@@ -2,6 +2,7 @@ package workspace
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -37,47 +38,41 @@ type InstanceStatus struct {
 // 5. Launch opencode command and capture PID
 // 6. Register instance in state
 func (m *Manager) CreateInstance(opts CreateOpts) (*state.Instance, error) {
-	// Validate inputs
 	if opts.Branch == "" {
 		return nil, fmt.Errorf("branch name cannot be empty")
 	}
 
-	// Generate unique ID
+	if err := m.checkNestedWorktree(); err != nil {
+		return nil, err
+	}
+
 	id, err := state.GenerateID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate instance ID: %w", err)
 	}
 
-	// Sanitize branch name for filesystem use
 	sanitizedBranch := sanitizeBranchName(opts.Branch)
-
-	// Build worktree path
 	worktreePath := filepath.Join(m.repoRoot, m.config.Workspace.WorktreeDir, sanitizedBranch)
 
-	// Ensure session exists
 	sessionName, err := m.EnsureSession()
 	if err != nil {
 		return nil, fmt.Errorf("failed to ensure tmux session: %w", err)
 	}
 
-	// Check if branch already exists
 	branchExists := m.git.BranchExists(opts.Branch)
 
-	// Create worktree
 	if branchExists {
-		// Branch exists, check out existing branch
 		if err := m.git.WorktreeAddExisting(worktreePath, opts.Branch); err != nil {
-			return nil, fmt.Errorf("failed to create worktree for existing branch: %w", err)
+			return nil, fmt.Errorf("failed to create worktree for existing branch %q: %w\n\nThe branch exists but couldn't be checked out. This may happen if:\n  - The branch is already checked out in another worktree\n  - There are filesystem permission issues\n\nTo fix:\n  1. Check existing worktrees: git worktree list\n  2. Remove stale worktrees if needed: git worktree prune", opts.Branch, err)
 		}
 	} else {
-		// Create new branch from base branch
 		baseBranch := opts.BaseBranch
 		if baseBranch == "" {
 			baseBranch = m.config.Workspace.BaseBranch
 		}
 
 		if err := m.git.WorktreeAdd(worktreePath, opts.Branch, baseBranch); err != nil {
-			return nil, fmt.Errorf("failed to create worktree with new branch: %w", err)
+			return nil, fmt.Errorf("failed to create worktree with new branch %q from %q: %w\n\nTo fix:\n  1. Ensure base branch %q exists: git branch -a | grep %s\n  2. Fetch latest changes: git fetch\n  3. Check disk space: df -h", opts.Branch, baseBranch, err, baseBranch, baseBranch)
 		}
 	}
 
@@ -409,7 +404,6 @@ func (m *Manager) buildOpencodeCommand() string {
 	parts := []string{m.config.OpenCode.Command}
 	parts = append(parts, m.config.OpenCode.Args...)
 
-	// Add model and provider if specified
 	if m.config.OpenCode.Model != "" {
 		parts = append(parts, "--model", m.config.OpenCode.Model)
 	}
@@ -418,4 +412,34 @@ func (m *Manager) buildOpencodeCommand() string {
 	}
 
 	return strings.Join(parts, " ")
+}
+
+// checkNestedWorktree checks if the current directory is inside a git worktree.
+// This prevents creating OCW instances inside worktrees, which would cause issues.
+func (m *Manager) checkNestedWorktree() error {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get current directory: %w", err)
+	}
+
+	current := cwd
+	for {
+		gitPath := filepath.Join(current, ".git")
+
+		info, err := os.Stat(gitPath)
+		if err == nil {
+			if !info.IsDir() {
+				return fmt.Errorf("cannot create OCW instance inside a git worktree\n\nYou are currently in a worktree at: %s\n\nTo fix:\n  1. Navigate to the main repository root\n  2. Run ocw from there instead", cwd)
+			}
+			break
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
+	}
+
+	return nil
 }

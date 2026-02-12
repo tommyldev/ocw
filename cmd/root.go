@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"github.com/tommyzliu/ocw/internal/config"
+	"github.com/tommyzliu/ocw/internal/deps"
 	"github.com/tommyzliu/ocw/internal/tui"
 	"github.com/tommyzliu/ocw/internal/workspace"
 )
@@ -28,7 +29,12 @@ var rootCmd = &cobra.Command{
 // - If OCW tmux session exists, re-attach to it
 // - Otherwise, create new session and launch TUI
 func runDefault() error {
-	// Get current working directory
+	depResults := deps.CheckAll()
+	if deps.HasCriticalErrors(depResults) {
+		errMsg := deps.FormatResults(depResults)
+		return fmt.Errorf("%s", errMsg)
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
@@ -42,7 +48,7 @@ func runDefault() error {
 		}
 		parent := filepath.Dir(repoRoot)
 		if parent == repoRoot {
-			return fmt.Errorf("not in a git repository; run 'ocw init' in a git repository")
+			return fmt.Errorf("not in a git repository\n\nOCW requires a git repository to manage worktrees.\n\nTo fix:\n  1. Initialize a git repository: git init\n  2. Or navigate to an existing git repository\n  3. Then run: ocw init")
 		}
 		repoRoot = parent
 	}
@@ -50,7 +56,7 @@ func runDefault() error {
 	// Check if .ocw exists
 	ocwDir := filepath.Join(repoRoot, ".ocw")
 	if _, err := os.Stat(ocwDir); os.IsNotExist(err) {
-		return fmt.Errorf(".ocw directory not found; run 'ocw init' first")
+		return fmt.Errorf(".ocw directory not found\n\nOCW is not initialized in this repository.\n\nTo fix:\n  Run: ocw init")
 	}
 
 	// Load configuration

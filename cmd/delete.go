@@ -64,7 +64,7 @@ var deleteCmd = &cobra.Command{
 			}
 
 			if instance == nil {
-				return fmt.Errorf("instance %q not found", instanceID)
+				return fmt.Errorf("instance %q not found\n\nTo fix:\n  1. List all instances: ocw list\n  2. Use the correct instance ID or name\n  3. Check if the instance was already deleted", instanceID)
 			}
 		}
 

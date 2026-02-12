@@ -28,15 +28,14 @@ var initCmd = &cobra.Command{
 			}
 			parent := filepath.Dir(repoRoot)
 			if parent == repoRoot {
-				return fmt.Errorf("not in a git repository")
+				return fmt.Errorf("not in a git repository\n\nOCW requires a git repository to manage worktrees.\n\nTo fix:\n  1. Initialize a git repository: git init\n  2. Or navigate to an existing git repository\n  3. Then run: ocw init")
 			}
 			repoRoot = parent
 		}
 
-		// Check if already initialized
 		ocwDir := filepath.Join(repoRoot, ".ocw")
 		if _, err := os.Stat(ocwDir); err == nil {
-			return fmt.Errorf("OCW workspace already initialized in %s", repoRoot)
+			return fmt.Errorf("OCW workspace already initialized\n\nLocation: %s\n\nTo reconfigure:\n  1. Edit the config: %s\n  2. Or remove and reinitialize: rm -rf %s && ocw init", repoRoot, filepath.Join(ocwDir, "config.toml"), ocwDir)
 		}
 
 		// Initialize workspace
