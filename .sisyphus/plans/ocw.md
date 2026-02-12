@@ -729,7 +729,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 6a. TUI Scaffold & Dashboard Skeleton
+- [x] 6a. TUI Scaffold & Dashboard Skeleton
 
   **What to do**:
   - Create `internal/tui/app.go` — root Bubbletea model:
