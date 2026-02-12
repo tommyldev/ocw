@@ -97,3 +97,19 @@ func (g *Git) GetRemotes() ([]string, error) {
 	remotes := strings.Split(output, "\n")
 	return remotes, nil
 }
+
+// DiffNameOnly returns the list of files changed between two refs
+// Uses git diff --name-only ref1..ref2
+func (g *Git) DiffNameOnly(ref1, ref2 string) ([]string, error) {
+	output, err := g.run("diff", "--name-only", fmt.Sprintf("%s..%s", ref1, ref2))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get diff files: %w", err)
+	}
+
+	if output == "" {
+		return []string{}, nil
+	}
+
+	files := strings.Split(strings.TrimSpace(output), "\n")
+	return files, nil
+}
