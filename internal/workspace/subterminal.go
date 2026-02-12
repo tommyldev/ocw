@@ -58,6 +58,14 @@ func (m *Manager) CreateSubTerminal(instanceID, label string) (string, error) {
 		return "", fmt.Errorf("failed to split window: %w", err)
 	}
 
+	// Send init command if configured
+	if m.config.Workspace.SubTerminalInitCommand != "" {
+		if err := m.tmux.SendKeys(newPaneID, m.config.Workspace.SubTerminalInitCommand); err != nil {
+			// Log error but continue - don't fail the sub-terminal creation
+			fmt.Printf("warning: failed to send init command to sub-terminal: %v\n", err)
+		}
+	}
+
 	// Update state with new sub-terminal
 	err = m.store.UpdateInstance(instanceID, func(i *state.Instance) {
 		i.SubTerminals = append(i.SubTerminals, state.SubTerminal{

@@ -20,8 +20,9 @@ type Config struct {
 
 // WorkspaceConfig contains worktree-related settings
 type WorkspaceConfig struct {
-	WorktreeDir string `toml:"worktree_dir"`
-	BaseBranch  string `toml:"base_branch"`
+	WorktreeDir            string `toml:"worktree_dir"`
+	BaseBranch             string `toml:"base_branch"`
+	SubTerminalInitCommand string `toml:"sub_terminal_init_command"`
 }
 
 // OpenCodeConfig contains OpenCode CLI settings
@@ -68,8 +69,9 @@ type UIConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Workspace: WorkspaceConfig{
-			WorktreeDir: ".worktrees",
-			BaseBranch:  "master",
+			WorktreeDir:            ".worktrees",
+			BaseBranch:             "master",
+			SubTerminalInitCommand: "",
 		},
 		OpenCode: OpenCodeConfig{
 			Command:  "opencode",

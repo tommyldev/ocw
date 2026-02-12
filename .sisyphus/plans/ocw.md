@@ -1923,7 +1923,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 25. Auto-Run Commands on Sub-Terminal Creation
+- [x] 25. Auto-Run Commands on Sub-Terminal Creation
 
   **What to do**:
   - Add config option `[workspace] sub_terminal_init_command = ""` (e.g., `"npm install"`)
