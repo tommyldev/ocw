@@ -957,7 +957,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 8. Instance Creation Flow (Create View)
+- [x] 8. Instance Creation Flow (Create View)
 
   **What to do**:
   - Create `internal/tui/views/create.go`:
