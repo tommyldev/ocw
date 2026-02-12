@@ -1991,7 +1991,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 29. Stack-Based Merge Ordering
+- [x] 29. Stack-Based Merge Ordering
 
   **What to do**:
   - Define dependencies between instances (A depends on B)

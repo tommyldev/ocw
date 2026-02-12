@@ -36,6 +36,7 @@ type Instance struct {
 	LastActivity  time.Time     `json:"last_activity"`
 	PRUrl         string        `json:"pr_url,omitempty"`
 	ConflictsWith []string      `json:"conflicts_with"`
+	DependsOn     []string      `json:"depends_on"`
 }
 
 // SubTerminal represents a sub-terminal within an instance

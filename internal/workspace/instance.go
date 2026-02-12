@@ -156,6 +156,7 @@ func (m *Manager) CreateInstance(opts CreateOpts) (*state.Instance, error) {
 		CreatedAt:     now,
 		LastActivity:  now,
 		ConflictsWith: []string{},
+		DependsOn:     []string{},
 	}
 
 	// Save to state

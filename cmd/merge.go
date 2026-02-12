@@ -85,6 +85,28 @@ var mergeCmd = &cobra.Command{
 
 		fmt.Printf("✓ No conflicts detected\n\n")
 
+		fmt.Printf("Checking dependencies...\n")
+		unmergedDeps, err := mgr.CheckDependenciesMerged(instance.ID)
+		if err != nil {
+			return fmt.Errorf("failed to check dependencies: %w", err)
+		}
+
+		if len(unmergedDeps) > 0 {
+			fmt.Printf("❌ Cannot merge: unmerged dependencies\n\n")
+			fmt.Printf("Merge these first:\n")
+			for _, depID := range unmergedDeps {
+				depInst, depErr := mgr.GetInstance(depID)
+				if depErr == nil {
+					fmt.Printf("  • %s (%s)\n", depInst.Name, depID)
+				} else {
+					fmt.Printf("  • %s\n", depID)
+				}
+			}
+			return fmt.Errorf("merge dependencies before merging this instance\n\nTo fix:\n  1. Merge the dependency instances first\n  2. Or remove the dependency: ocw depend --remove %s <dep-id>", instance.ID)
+		}
+
+		fmt.Printf("✓ Dependencies satisfied\n\n")
+
 		tool, err := mgr.DetectPRTool()
 		if err != nil {
 			return err

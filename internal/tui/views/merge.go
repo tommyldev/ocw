@@ -27,6 +27,12 @@ type MergeConflictCheckMsg struct {
 	Error         error
 }
 
+// MergeDependencyCheckMsg is sent when dependency check completes
+type MergeDependencyCheckMsg struct {
+	UnmergedDeps []string
+	Error        error
+}
+
 // ResolveConflictsRequestMsg requests conflict resolution flow
 type ResolveConflictsRequestMsg struct {
 	InstanceID string
@@ -49,9 +55,12 @@ type Merge struct {
 	hasConflicts      bool
 	conflictFiles     []string
 	conflictCheckDone bool
+	unmergedDeps      []string
+	depCheckDone      bool
 	merging           bool
 	mergeError        string
 	prURL             string
+	allInstances      []state.Instance
 	styles            MergeStyles
 }
 
@@ -66,17 +75,19 @@ type MergeStyles struct {
 }
 
 // NewMerge creates a new Merge view
-func NewMerge(instance state.Instance, manager *workspace.Manager, gitManager *git.Git, tmuxClient *tmux.Tmux, styles MergeStyles) *Merge {
+func NewMerge(instance state.Instance, manager *workspace.Manager, gitManager *git.Git, tmuxClient *tmux.Tmux, allInstances []state.Instance, styles MergeStyles) *Merge {
 	m := &Merge{
 		instance:          instance,
 		manager:           manager,
 		gitManager:        gitManager,
 		tmuxClient:        tmuxClient,
 		conflictDetector:  workspace.NewConflictDetector(gitManager),
+		allInstances:      allInstances,
 		width:             80,
 		height:            24,
 		styles:            styles,
 		conflictCheckDone: false,
+		depCheckDone:      false,
 		merging:           false,
 		// Default PR title: format branch name
 		prTitle: formatBranchNameForPR(instance.Branch),
@@ -232,7 +243,23 @@ func (m *Merge) Init() tea.Cmd {
 	return tea.Batch(
 		m.loadDiff(),
 		m.checkConflicts(),
+		m.checkDependencies(),
 	)
+}
+
+func (m *Merge) checkDependencies() tea.Cmd {
+	return func() tea.Msg {
+		if m.manager == nil {
+			return MergeDependencyCheckMsg{Error: fmt.Errorf("manager not available")}
+		}
+
+		unmerged, err := m.manager.CheckDependenciesMerged(m.instance.ID)
+		if err != nil {
+			return MergeDependencyCheckMsg{Error: err}
+		}
+
+		return MergeDependencyCheckMsg{UnmergedDeps: unmerged}
+	}
 }
 
 // loadDiff loads the diff data
@@ -341,6 +368,15 @@ func (m *Merge) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.conflictFiles = msg.ConflictFiles
 		return m, nil
 
+	case MergeDependencyCheckMsg:
+		m.depCheckDone = true
+		if msg.Error != nil {
+			m.mergeError = msg.Error.Error()
+			return m, nil
+		}
+		m.unmergedDeps = msg.UnmergedDeps
+		return m, nil
+
 	case MergeMsg:
 		m.merging = false
 		if msg.Error != nil {
@@ -364,7 +400,7 @@ func (m *Merge) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Delegate to form if not merging and conflicts are checked
-	if !m.merging && m.conflictCheckDone && !m.hasConflicts && m.prURL == "" {
+	if !m.merging && m.conflictCheckDone && m.depCheckDone && !m.hasConflicts && len(m.unmergedDeps) == 0 && m.prURL == "" {
 		form, cmd := m.form.Update(msg)
 		if f, ok := form.(*huh.Form); ok {
 			m.form = f
@@ -418,12 +454,16 @@ func (m *Merge) View() string {
 		return m.renderError()
 	}
 
-	if !m.conflictCheckDone {
+	if !m.conflictCheckDone || !m.depCheckDone {
 		return m.renderLoading()
 	}
 
 	if m.hasConflicts {
 		return m.renderConflicts()
+	}
+
+	if len(m.unmergedDeps) > 0 {
+		return m.renderUnmergedDeps()
 	}
 
 	return m.renderForm()
@@ -432,7 +472,7 @@ func (m *Merge) View() string {
 // renderLoading renders a loading state
 func (m *Merge) renderLoading() string {
 	title := m.styles.Title.Render(fmt.Sprintf("Merge: %s → %s", m.instance.Branch, m.instance.BaseBranch))
-	spinner := "⠋ Checking for conflicts..."
+	spinner := "⠋ Checking conflicts and dependencies..."
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
 		title,
@@ -466,7 +506,39 @@ func (m *Merge) renderConflicts() string {
 	)
 }
 
-// renderForm renders the main merge form
+func (m *Merge) renderUnmergedDeps() string {
+	title := m.styles.Title.Render(fmt.Sprintf("Merge: %s → %s", m.instance.Branch, m.instance.BaseBranch))
+
+	warning := m.styles.Warning.Render("⚠ Cannot merge: unmerged dependencies")
+
+	nameMap := make(map[string]string)
+	for _, inst := range m.allInstances {
+		nameMap[inst.ID] = inst.Name
+	}
+
+	var depList strings.Builder
+	depList.WriteString("\nMerge these first:\n")
+	for _, depID := range m.unmergedDeps {
+		name := depID
+		if n, ok := nameMap[depID]; ok {
+			name = n
+		}
+		depList.WriteString(fmt.Sprintf("  • %s (%s)\n", name, depID))
+	}
+
+	help := m.styles.Help.Render("ESC to go back")
+
+	return lipgloss.JoinVertical(
+		lipgloss.Left,
+		title,
+		"",
+		warning,
+		depList.String(),
+		"",
+		help,
+	)
+}
+
 func (m *Merge) renderForm() string {
 	title := m.styles.Title.Render(fmt.Sprintf("Merge: %s → %s", m.instance.Branch, m.instance.BaseBranch))
 
@@ -493,8 +565,8 @@ func (m *Merge) renderForm() string {
 
 	// Conflict status
 	conflictStatus := m.styles.Success.Render("✓ No conflicts")
+	depStatus := m.styles.Success.Render("✓ Dependencies satisfied")
 
-	// Form
 	formView := m.form.View()
 
 	help := m.styles.Help.Render("Press Enter to push & create PR | ESC to cancel")
@@ -507,6 +579,7 @@ func (m *Merge) renderForm() string {
 		fileList.String(),
 		"",
 		conflictStatus,
+		depStatus,
 		"",
 		formView,
 		"",

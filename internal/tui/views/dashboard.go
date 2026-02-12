@@ -7,6 +7,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/tommyzliu/ocw/internal/state"
 )
@@ -42,10 +44,11 @@ type StatusStyles struct {
 
 type CustomDelegate struct {
 	statusStyles StatusStyles
+	allInstances []state.Instance
 }
 
-func NewCustomDelegate(statusStyles StatusStyles) *CustomDelegate {
-	return &CustomDelegate{statusStyles: statusStyles}
+func NewCustomDelegate(statusStyles StatusStyles, allInstances []state.Instance) *CustomDelegate {
+	return &CustomDelegate{statusStyles: statusStyles, allInstances: allInstances}
 }
 
 // Height returns the height of a list item
@@ -96,13 +99,31 @@ func (d *CustomDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		conflictStr = " ⚠"
 	}
 
-	firstLine := fmt.Sprintf("%d. %s %s | %s | %s%s",
+	depStr := ""
+	if len(inst.DependsOn) > 0 {
+		nameMap := make(map[string]string)
+		for _, ai := range d.allInstances {
+			nameMap[ai.ID] = ai.Name
+		}
+		var depNames []string
+		for _, depID := range inst.DependsOn {
+			if name, ok := nameMap[depID]; ok {
+				depNames = append(depNames, name)
+			}
+		}
+		if len(depNames) > 0 {
+			depStr = fmt.Sprintf(" → depends on %s", strings.Join(depNames, ", "))
+		}
+	}
+
+	firstLine := fmt.Sprintf("%d. %s %s | %s | %s%s%s",
 		index+1,
 		statusStyle.Render(statusIcon),
 		inst.Name,
 		elapsedStr,
 		subTermStr,
 		conflictStr,
+		depStr,
 	)
 
 	secondLine := fmt.Sprintf("   Branch: %s → %s",
@@ -195,7 +216,7 @@ func NewDashboard(instances []state.Instance, statusStyles StatusStyles) *Dashbo
 		items[i] = InstanceItem{instance: inst}
 	}
 
-	delegate := NewCustomDelegate(statusStyles)
+	delegate := NewCustomDelegate(statusStyles, instances)
 	l := list.New(items, delegate, 80, 20)
 	l.Title = "OCW Instances"
 	l.SetShowStatusBar(true)
