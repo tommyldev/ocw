@@ -99,6 +99,16 @@ func (t *Tmux) CapturePaneContent(target string) (string, error) {
 	return output, nil
 }
 
+// CapturePaneScrollback captures the full scrollback history of a pane.
+// Uses -S - to start from the beginning of scrollback and -E - for the end.
+func (t *Tmux) CapturePaneScrollback(target string) (string, error) {
+	output, err := t.run("capture-pane", "-p", "-S", "-", "-E", "-", "-t", target)
+	if err != nil {
+		return "", fmt.Errorf("failed to capture scrollback for pane %q: %w", target, err)
+	}
+	return output, nil
+}
+
 // SetOption sets a tmux option for the specified target (session, window, or pane).
 func (t *Tmux) SetOption(target, option, value string) error {
 	if _, err := t.run("set-option", "-t", target, option, value); err != nil {

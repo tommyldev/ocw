@@ -365,6 +365,38 @@ func (m *Manager) GetInstance(id string) (*state.Instance, error) {
 	return nil, fmt.Errorf("instance %q not found", id)
 }
 
+// RenameInstance updates the display name of an instance.
+func (m *Manager) RenameInstance(id, newName string) error {
+	if newName == "" {
+		return fmt.Errorf("new name cannot be empty")
+	}
+
+	st, err := m.store.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load state: %w", err)
+	}
+
+	var instance *state.Instance
+	for i := range st.Instances {
+		if st.Instances[i].ID == id {
+			instance = &st.Instances[i]
+			break
+		}
+	}
+
+	if instance == nil {
+		return fmt.Errorf("instance %q not found", id)
+	}
+
+	instance.Name = newName
+
+	if err := m.store.Save(st); err != nil {
+		return fmt.Errorf("failed to save state: %w", err)
+	}
+
+	return nil
+}
+
 // sanitizeBranchName converts a branch name to a safe filesystem path.
 // Handles slashes, special characters, and ensures valid directory names.
 func sanitizeBranchName(branch string) string {

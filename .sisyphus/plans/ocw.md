@@ -1828,7 +1828,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 20. Instance Rename
+- [x] 20. Instance Rename
 
   **What to do**:
   - Add rename overlay in dashboard:
@@ -1846,7 +1846,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 21. Send Prompt to Instance (`s` hotkey)
+- [x] 21. Send Prompt to Instance (`s` hotkey)
 
   **What to do**:
   - Add text input overlay for sending prompts:
@@ -1865,7 +1865,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 22. View Instance Log/Output (`l` hotkey)
+- [x] 22. View Instance Log/Output (`l` hotkey)
 
   **What to do**:
   - Add log viewer in TUI:

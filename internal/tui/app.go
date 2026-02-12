@@ -21,6 +21,8 @@ const (
 	StateDiff          AppState = "diff"
 	StateMerge         AppState = "merge"
 	StateDeleteConfirm AppState = "delete-confirm"
+	StateLog           AppState = "log"
+	StateSendPrompt    AppState = "send-prompt"
 )
 
 // FocusMsg is sent when user wants to focus on an instance
@@ -35,6 +37,12 @@ type FocusCompleteMsg struct {
 
 // DeleteMsg is sent when deletion completes
 type DeleteMsg struct {
+	Success bool
+	Error   error
+}
+
+// SendPromptMsg is sent when prompt sending completes
+type SendPromptMsg struct {
 	Success bool
 	Error   error
 }
@@ -54,10 +62,14 @@ type App struct {
 	diff               *views.Diff
 	merge              *views.Merge
 	help               *views.Help
+	log                *views.Log
 	err                error
 	program            *tea.Program
 	deleteInstanceID   string
 	deleteInstanceName string
+	promptInstanceID   string
+	promptText         string
+	promptFeedback     string
 }
 
 func NewApp(ctx *Context) *App {
@@ -155,6 +167,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.help != nil {
 			a.help.SetSize(msg.Width, msg.Height)
 		}
+		if a.log != nil {
+			a.log.SetSize(msg.Width, msg.Height)
+		}
 		return a, nil
 	case views.CreateMsg:
 		// Handle create completion
@@ -173,6 +188,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		a.state = StateDashboard
 		return a.refreshInstances()
+	case SendPromptMsg:
+		if msg.Error != nil {
+			a.err = msg.Error
+		} else {
+			a.promptFeedback = "Prompt sent successfully!"
+		}
+		a.state = StateDashboard
+		return a, nil
 	case views.DiffLoadedMsg:
 		// Handle diff loaded message
 		if a.diff != nil {
@@ -183,6 +206,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.merge != nil {
 			model, cmd := a.merge.Update(msg)
 			a.merge = model.(*views.Merge)
+			return a, cmd
+		}
+	case views.LogLoadedMsg:
+		if a.log != nil {
+			model, cmd := a.log.Update(msg)
+			a.log = model.(*views.Log)
 			return a, cmd
 		}
 	case views.MergeMsg:
@@ -242,6 +271,17 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, cmd
 		}
+	case StateLog:
+		if a.log != nil {
+			model, cmd := a.log.Update(msg)
+			a.log = model.(*views.Log)
+			// Check if ESC was pressed to return to dashboard
+			if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "esc" {
+				a.state = StateDashboard
+				return a, nil
+			}
+			return a, cmd
+		}
 	}
 
 	return a, nil
@@ -279,8 +319,15 @@ func (a *App) View() string {
 			return a.help.View()
 		}
 		return "Loading..."
+	case StateLog:
+		if a.log != nil {
+			return a.log.View()
+		}
+		return "Loading..."
 	case StateDeleteConfirm:
 		return a.renderDeleteConfirm()
+	case StateSendPrompt:
+		return a.renderSendPrompt()
 	default:
 		return "Unknown state"
 	}
@@ -368,7 +415,37 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return a, a.merge.Init()
 			}
 		}
+	case "l":
+		if a.state == StateDashboard && a.dashboard != nil {
+			selectedIdx := a.dashboard.GetSelectedIndex()
+			if selectedIdx >= 0 && selectedIdx < len(a.instances) {
+				selectedInstance := a.instances[selectedIdx]
+				a.log = views.NewLog(selectedInstance, a.ctx.Manager.Tmux())
+				a.log.SetSize(a.width, a.height)
+				a.state = StateLog
+				return a, a.log.Init()
+			}
+		}
+	case "s":
+		if a.state == StateDashboard && a.dashboard != nil {
+			selectedIdx := a.dashboard.GetSelectedIndex()
+			if selectedIdx >= 0 && selectedIdx < len(a.instances) {
+				selectedInstance := a.instances[selectedIdx]
+				a.promptInstanceID = selectedInstance.ID
+				a.promptText = ""
+				a.promptFeedback = ""
+				a.state = StateSendPrompt
+				return a, nil
+			}
+		}
 	case "enter":
+		if a.state == StateSendPrompt {
+			if a.promptText != "" {
+				return a, a.sendPromptCmd(a.promptInstanceID, a.promptText)
+			}
+			a.state = StateDashboard
+			return a, nil
+		}
 		if a.state == StateDashboard && a.dashboard != nil {
 			selectedIdx := a.dashboard.GetSelectedIndex()
 			if selectedIdx >= 0 && selectedIdx < len(a.instances) {
@@ -381,6 +458,13 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if idx >= 0 && idx < len(a.instances) {
 				return a, a.focusInstance(idx)
 			}
+		}
+	case "backspace":
+		if a.state == StateSendPrompt {
+			if len(a.promptText) > 0 {
+				a.promptText = a.promptText[:len(a.promptText)-1]
+			}
+			return a, nil
 		}
 	case "esc":
 		if a.state == StateCreate {
@@ -395,9 +479,22 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.state = StateDashboard
 			return a, nil
 		}
+		if a.state == StateSendPrompt {
+			a.state = StateDashboard
+			return a, nil
+		}
 	case "y":
 		if a.state == StateDeleteConfirm {
 			return a, a.deleteInstanceCmd(a.deleteInstanceID)
+		}
+	}
+
+	// Handle text input for send prompt
+	if a.state == StateSendPrompt {
+		key := msg.String()
+		if len(key) == 1 && key >= " " && key <= "~" {
+			a.promptText += key
+			return a, nil
 		}
 	}
 
@@ -508,4 +605,41 @@ func (a *App) renderDeleteConfirm() string {
 	prompt := "Delete instance? [y/N] (ESC to cancel)"
 
 	return fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s", title, instanceName, warning, prompt)
+}
+
+func (a *App) sendPromptCmd(instanceID, promptText string) tea.Cmd {
+	return func() tea.Msg {
+		if a.ctx.Manager == nil {
+			return SendPromptMsg{Success: false, Error: fmt.Errorf("manager not available")}
+		}
+
+		var instance *state.Instance
+		for i := range a.instances {
+			if a.instances[i].ID == instanceID {
+				instance = &a.instances[i]
+				break
+			}
+		}
+
+		if instance == nil {
+			return SendPromptMsg{Success: false, Error: fmt.Errorf("instance not found")}
+		}
+
+		if err := a.ctx.Manager.Tmux().SendKeys(instance.PrimaryPane, promptText); err != nil {
+			return SendPromptMsg{Success: false, Error: fmt.Errorf("failed to send prompt: %w", err)}
+		}
+
+		return SendPromptMsg{Success: true, Error: nil}
+	}
+}
+
+func (a *App) renderSendPrompt() string {
+	title := a.styles.Header.Render("Send Prompt to Instance")
+	textBox := a.styles.FocusedBorder.Render(a.promptText + "█")
+	help := a.styles.Footer.Render("Type your prompt | Enter: Send | ESC: Cancel")
+	feedback := ""
+	if a.promptFeedback != "" {
+		feedback = "\n\n" + a.styles.StatusActiveStyle.Render(a.promptFeedback)
+	}
+	return fmt.Sprintf("%s\n\n%s\n\n%s%s", title, textBox, help, feedback)
 }
