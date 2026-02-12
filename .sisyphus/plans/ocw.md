@@ -1116,7 +1116,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 10. Diff View
+- [x] 10. Diff View
 
   **What to do**:
   - Create `internal/tui/views/diff.go`:
