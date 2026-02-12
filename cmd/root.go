@@ -61,10 +61,33 @@ func runTUI() error {
 		ctx := tui.NewContext(cfg, nil)
 		app := tui.NewApp(ctx)
 		p := tea.NewProgram(app, tea.WithAltScreen())
+		app.SetProgram(p)
 		if _, err := p.Run(); err != nil {
 			return fmt.Errorf("failed to run TUI: %w", err)
 		}
 		return nil
+	}
+
+	result, err := mgr.Reconcile()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Reconciliation failed: %v\n", err)
+	} else if result != nil {
+		if result.InstancesFixed > 0 || result.InstancesRemoved > 0 || len(result.OrphanedWorktrees) > 0 {
+			fmt.Fprintf(os.Stderr, "Startup Reconciliation:\n")
+			if result.InstancesFixed > 0 {
+				fmt.Fprintf(os.Stderr, "  - Marked %d instance(s) as error (crashed/stopped)\n", result.InstancesFixed)
+			}
+			if result.InstancesRemoved > 0 {
+				fmt.Fprintf(os.Stderr, "  - Removed %d instance(s) (missing worktrees)\n", result.InstancesRemoved)
+			}
+			if len(result.OrphanedWorktrees) > 0 {
+				fmt.Fprintf(os.Stderr, "  - Found %d orphaned worktree(s) (not in state)\n", len(result.OrphanedWorktrees))
+			}
+			if len(result.Errors) > 0 {
+				fmt.Fprintf(os.Stderr, "  - %d warning(s) during reconciliation\n", len(result.Errors))
+			}
+			fmt.Fprintf(os.Stderr, "\n")
+		}
 	}
 
 	// Create TUI context
@@ -73,6 +96,7 @@ func runTUI() error {
 	// Create and run app
 	app := tui.NewApp(ctx)
 	p := tea.NewProgram(app, tea.WithAltScreen())
+	app.SetProgram(p)
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("failed to run TUI: %w", err)
 	}

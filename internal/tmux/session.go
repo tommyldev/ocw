@@ -62,3 +62,15 @@ func (t *Tmux) AttachSession(name string) error {
 	}
 	return nil
 }
+
+// AttachWindow attaches to a specific window in a session, taking over the terminal.
+// This is an interactive operation that blocks until the user detaches.
+// The window is selected before attaching.
+func (t *Tmux) AttachWindow(session, window string) error {
+	// Build the target: session:window
+	target := session + ":" + window
+	if err := t.runAttached("attach-session", "-t", target); err != nil {
+		return fmt.Errorf("failed to attach to window %q in session %q: %w", window, session, err)
+	}
+	return nil
+}

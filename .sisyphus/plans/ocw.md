@@ -1343,7 +1343,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 13. Merge View & PR Creation
+- [x] 13. Merge View & PR Creation
 
   **What to do**:
   - Create `internal/tui/views/merge.go`:
@@ -1434,7 +1434,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 14. Instance Deletion Flow
+- [x] 14. Instance Deletion Flow
 
   **What to do**:
   - Create confirmation overlay in dashboard:
@@ -1590,7 +1590,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 16. Startup Reconciliation & Crash Recovery
+- [x] 16. Startup Reconciliation & Crash Recovery
 
   **What to do**:
   - Create `internal/workspace/recovery.go`:

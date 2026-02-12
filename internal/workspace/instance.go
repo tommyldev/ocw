@@ -171,7 +171,7 @@ func (m *Manager) CreateInstance(opts CreateOpts) (*state.Instance, error) {
 // 4. Remove worktree
 // 5. Optionally delete branch
 // 6. Remove from state
-func (m *Manager) DeleteInstance(id string, force bool) error {
+func (m *Manager) DeleteInstance(id string, force bool, deleteBranch bool) error {
 	// Load state
 	st, err := m.store.Load()
 	if err != nil {
@@ -202,14 +202,17 @@ func (m *Manager) DeleteInstance(id string, force bool) error {
 	}
 
 	// Remove the worktree
-	if err := m.git.WorktreeRemove(instance.WorktreePath, force); err != nil && !force {
-		return fmt.Errorf("failed to remove worktree: %w", err)
+	if err := m.git.WorktreeRemove(instance.WorktreePath, force); err != nil {
+		if !force {
+			return fmt.Errorf("failed to remove worktree: %w", err)
+		}
 	}
 
-	// Optionally delete the branch (only if not the base branch and force is set)
-	if force && instance.Branch != instance.BaseBranch {
-		// Note: Branch deletion is optional and not implemented in git package yet
-		// This would require adding a DeleteBranch method to git.Git
+	// Optionally delete the branch (only if requested and not the base branch)
+	if deleteBranch && instance.Branch != instance.BaseBranch && instance.Branch != "" {
+		if err := m.git.BranchDelete(instance.Branch, true); err != nil {
+			return fmt.Errorf("failed to delete branch: %w", err)
+		}
 	}
 
 	// Remove from state

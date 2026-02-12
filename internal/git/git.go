@@ -83,6 +83,19 @@ func (g *Git) BranchExists(branch string) bool {
 	return err == nil
 }
 
+// BranchDelete deletes a branch (use force=true for -D, false for -d)
+func (g *Git) BranchDelete(branch string, force bool) error {
+	flag := "-d"
+	if force {
+		flag = "-D"
+	}
+	_, err := g.run("branch", flag, branch)
+	if err != nil {
+		return fmt.Errorf("failed to delete branch: %w", err)
+	}
+	return nil
+}
+
 // GetRemotes returns a list of configured remotes
 func (g *Git) GetRemotes() ([]string, error) {
 	output, err := g.run("remote")

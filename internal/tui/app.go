@@ -13,11 +13,13 @@ import (
 type AppState string
 
 const (
-	StateDashboard AppState = "dashboard"
-	StateDetail    AppState = "detail"
-	StateCreate    AppState = "create"
-	StateHelp      AppState = "help"
-	StateDiff      AppState = "diff"
+	StateDashboard     AppState = "dashboard"
+	StateDetail        AppState = "detail"
+	StateCreate        AppState = "create"
+	StateHelp          AppState = "help"
+	StateDiff          AppState = "diff"
+	StateMerge         AppState = "merge"
+	StateDeleteConfirm AppState = "delete-confirm"
 )
 
 // FocusMsg is sent when user wants to focus on an instance
@@ -30,21 +32,30 @@ type FocusCompleteMsg struct {
 	Error error
 }
 
+// DeleteMsg is sent when deletion completes
+type DeleteMsg struct {
+	Success bool
+	Error   error
+}
+
 // App is the root Bubbletea model
 type App struct {
-	ctx       *Context
-	state     AppState
-	keyMap    KeyMap
-	styles    Styles
-	instances []state.Instance
-	selected  int
-	width     int
-	height    int
-	dashboard *views.Dashboard
-	create    *views.Create
-	diff      *views.Diff
-	err       error
-	program   *tea.Program
+	ctx                *Context
+	state              AppState
+	keyMap             KeyMap
+	styles             Styles
+	instances          []state.Instance
+	selected           int
+	width              int
+	height             int
+	dashboard          *views.Dashboard
+	create             *views.Create
+	diff               *views.Diff
+	merge              *views.Merge
+	err                error
+	program            *tea.Program
+	deleteInstanceID   string
+	deleteInstanceName string
 }
 
 func NewApp(ctx *Context) *App {
@@ -125,6 +136,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.diff != nil {
 			a.diff.SetSize(msg.Width, msg.Height)
 		}
+		if a.merge != nil {
+			a.merge.SetSize(msg.Width, msg.Height)
+		}
 		return a, nil
 	case views.CreateMsg:
 		// Handle create completion
@@ -135,11 +149,38 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Success - return to dashboard
 		a.state = StateDashboard
 		return a.refreshInstances()
+	case DeleteMsg:
+		if msg.Error != nil {
+			a.err = msg.Error
+			a.state = StateDashboard
+			return a, nil
+		}
+		a.state = StateDashboard
+		return a.refreshInstances()
 	case views.DiffLoadedMsg:
 		// Handle diff loaded message
 		if a.diff != nil {
 			model, cmd := a.diff.Update(msg)
 			a.diff = model.(*views.Diff)
+			return a, cmd
+		}
+		if a.merge != nil {
+			model, cmd := a.merge.Update(msg)
+			a.merge = model.(*views.Merge)
+			return a, cmd
+		}
+	case views.MergeMsg:
+		if msg.Error != nil {
+			a.err = msg.Error
+			a.state = StateDashboard
+			return a, nil
+		}
+		a.state = StateDashboard
+		return a.refreshInstances()
+	case views.MergeConflictCheckMsg:
+		if a.merge != nil {
+			model, cmd := a.merge.Update(msg)
+			a.merge = model.(*views.Merge)
 			return a, cmd
 		}
 	case FocusCompleteMsg:
@@ -174,6 +215,17 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return a, cmd
 		}
+	case StateMerge:
+		if a.merge != nil {
+			model, cmd := a.merge.Update(msg)
+			a.merge = model.(*views.Merge)
+			// Check if ESC was pressed to return to dashboard
+			if keyMsg, ok := msg.(tea.KeyMsg); ok && keyMsg.String() == "esc" {
+				a.state = StateDashboard
+				return a, nil
+			}
+			return a, cmd
+		}
 	}
 
 	return a, nil
@@ -201,8 +253,15 @@ func (a *App) View() string {
 			return a.diff.View()
 		}
 		return "Loading..."
+	case StateMerge:
+		if a.merge != nil {
+			return a.merge.View()
+		}
+		return "Loading..."
 	case StateHelp:
 		return a.renderHelp()
+	case StateDeleteConfirm:
+		return a.renderDeleteConfirm()
 	default:
 		return "Unknown state"
 	}
@@ -226,10 +285,13 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if a.state == StateDashboard {
 			return a.refreshInstances()
 		}
-	case "n":
+	case "n", "N":
+		if a.state == StateDeleteConfirm {
+			a.state = StateDashboard
+			return a, nil
+		}
 		if a.state == StateDashboard {
 			a.state = StateCreate
-			// Reset create form
 			defaultBase := "main"
 			if a.ctx.Config != nil && a.ctx.Config.Workspace.BaseBranch != "" {
 				defaultBase = a.ctx.Config.Workspace.BaseBranch
@@ -244,6 +306,17 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			a.create.SetSize(a.width, a.height)
 			return a, nil
 		}
+	case "d":
+		if a.state == StateDashboard && a.dashboard != nil {
+			selectedIdx := a.dashboard.GetSelectedIndex()
+			if selectedIdx >= 0 && selectedIdx < len(a.instances) {
+				selectedInstance := a.instances[selectedIdx]
+				a.deleteInstanceID = selectedInstance.ID
+				a.deleteInstanceName = selectedInstance.Name
+				a.state = StateDeleteConfirm
+				return a, nil
+			}
+		}
 	case "f":
 		if a.state == StateDashboard && a.dashboard != nil {
 			selectedIdx := a.dashboard.GetSelectedIndex()
@@ -254,6 +327,26 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				a.diff.SetSize(a.width, a.height)
 				a.state = StateDiff
 				return a, a.diff.Init()
+			}
+		}
+	case "m":
+		if a.state == StateDashboard && a.dashboard != nil {
+			selectedIdx := a.dashboard.GetSelectedIndex()
+			if selectedIdx >= 0 && selectedIdx < len(a.instances) {
+				selectedInstance := a.instances[selectedIdx]
+				gitMgr := git.NewGit(selectedInstance.WorktreePath)
+				mergeStyles := views.MergeStyles{
+					Title:      a.styles.Header,
+					Error:      a.styles.ErrorText,
+					Success:    a.styles.StatusMergedStyle,
+					Warning:    a.styles.ConflictWarning,
+					Help:       a.styles.Footer,
+					FormBorder: a.styles.FocusedBorder,
+				}
+				a.merge = views.NewMerge(selectedInstance, a.ctx.Manager, gitMgr, mergeStyles)
+				a.merge.SetSize(a.width, a.height)
+				a.state = StateMerge
+				return a, a.merge.Init()
 			}
 		}
 	case "enter":
@@ -274,6 +367,14 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if a.state == StateCreate {
 			a.state = StateDashboard
 			return a, nil
+		}
+		if a.state == StateDeleteConfirm {
+			a.state = StateDashboard
+			return a, nil
+		}
+	case "y":
+		if a.state == StateDeleteConfirm {
+			return a, a.deleteInstanceCmd(a.deleteInstanceID)
 		}
 	}
 
@@ -356,6 +457,21 @@ func (a *App) focusInstance(instanceIndex int) tea.Cmd {
 	}
 }
 
+func (a *App) deleteInstanceCmd(instanceID string) tea.Cmd {
+	return func() tea.Msg {
+		if a.ctx.Manager == nil {
+			return DeleteMsg{Success: false, Error: fmt.Errorf("manager not available")}
+		}
+
+		err := a.ctx.Manager.DeleteInstance(instanceID, false, false)
+		if err != nil {
+			return DeleteMsg{Success: false, Error: fmt.Errorf("failed to delete instance: %w", err)}
+		}
+
+		return DeleteMsg{Success: true, Error: nil}
+	}
+}
+
 // renderHelp renders the help screen
 func (a *App) renderHelp() string {
 	help := "OCW - Open Code Workspace\n\n"
@@ -370,4 +486,13 @@ func (a *App) renderHelp() string {
 	help += fmt.Sprintf("  %s - %s\n", "ctrl+c/q", "quit")
 	help += "\nPress ? to close help"
 	return help
+}
+
+func (a *App) renderDeleteConfirm() string {
+	title := a.styles.Header.Render("Delete Instance")
+	instanceName := a.styles.FocusedBorder.Render(a.deleteInstanceName)
+	warning := a.styles.ErrorText.Render("⚠ This will remove the worktree and kill all processes")
+	prompt := "Delete instance? [y/N] (ESC to cancel)"
+
+	return fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s", title, instanceName, warning, prompt)
 }

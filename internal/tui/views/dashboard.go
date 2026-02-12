@@ -249,67 +249,6 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.list.CursorUp()
 		case "down", "j":
 			d.list.CursorDown()
-		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
-			idx := int(msg.String()[0] - '0' - 1)
-			if idx >= 0 && idx < len(d.instances) {
-				for i := 0; i < idx; i++ {
-					d.list.CursorDown()
-				}
-				for i := 0; i > idx; i-- {
-					d.list.CursorUp()
-				}
-			}
-		case "n":
-			return d, tea.Sequence(
-				tea.Println("Action: Create new instance (n)"),
-			)
-		case "d":
-			return d, tea.Sequence(
-				tea.Println("Action: Delete instance (d)"),
-			)
-		case "e":
-			return d, tea.Sequence(
-				tea.Println("Action: Open in editor (e)"),
-			)
-		case "t":
-			return d, tea.Sequence(
-				tea.Println("Action: Create sub-terminal (t)"),
-			)
-		case "T":
-			return d, tea.Sequence(
-				tea.Println("Action: List sub-terminals (T)"),
-			)
-		case "f":
-			return d, tea.Sequence(
-				tea.Println("Action: Show diff (f)"),
-			)
-		case "m":
-			return d, tea.Sequence(
-				tea.Println("Action: Merge instance (m)"),
-			)
-		case "enter":
-			return d, tea.Sequence(
-				tea.Println("Action: Focus instance (enter)"),
-			)
-		case "p":
-			return d, tea.Sequence(
-				tea.Println("Action: Pause/resume instance (p)"),
-			)
-		case "r":
-			return d, tea.Sequence(
-				tea.Println("Action: Rename instance (r)"),
-			)
-		case "?":
-			return d, tea.Sequence(
-				tea.Println("Action: Show help (?)"),
-			)
-		case "q":
-			return d, tea.Quit
-		case "Q":
-			return d, tea.Sequence(
-				tea.Println("Action: Kill all and quit (Q)"),
-				tea.Quit,
-			)
 		}
 
 	case tea.WindowSizeMsg:
