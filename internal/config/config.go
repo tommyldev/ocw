@@ -18,11 +18,18 @@ type Config struct {
 	UI        UIConfig        `toml:"ui"`
 }
 
+// Template defines a predefined starting point for new instances
+type Template struct {
+	BaseBranch  string `toml:"base_branch"`
+	InitCommand string `toml:"init_command"`
+}
+
 // WorkspaceConfig contains worktree-related settings
 type WorkspaceConfig struct {
-	WorktreeDir            string `toml:"worktree_dir"`
-	BaseBranch             string `toml:"base_branch"`
-	SubTerminalInitCommand string `toml:"sub_terminal_init_command"`
+	WorktreeDir            string              `toml:"worktree_dir"`
+	BaseBranch             string              `toml:"base_branch"`
+	SubTerminalInitCommand string              `toml:"sub_terminal_init_command"`
+	Templates              map[string]Template `toml:"templates"`
 }
 
 // OpenCodeConfig contains OpenCode CLI settings
@@ -72,6 +79,16 @@ func DefaultConfig() *Config {
 			WorktreeDir:            ".worktrees",
 			BaseBranch:             "master",
 			SubTerminalInitCommand: "",
+			Templates: map[string]Template{
+				"feature": {
+					BaseBranch:  "main",
+					InitCommand: "",
+				},
+				"hotfix": {
+					BaseBranch:  "production",
+					InitCommand: "git fetch origin production",
+				},
+			},
 		},
 		OpenCode: OpenCodeConfig{
 			Command:  "opencode",

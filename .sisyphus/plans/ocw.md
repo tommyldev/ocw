@@ -1974,7 +1974,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 28. Template Branches
+- [x] 28. Template Branches
 
   **What to do**:
   - Config option for template branches: predefined starting points

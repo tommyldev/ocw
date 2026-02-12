@@ -14,9 +14,10 @@ import (
 
 // CreateOpts contains options for creating a new instance.
 type CreateOpts struct {
-	Name       string // Display name for the instance
-	Branch     string // Branch name to create/use
-	BaseBranch string // Base branch to branch from
+	Name        string // Display name for the instance
+	Branch      string // Branch name to create/use
+	BaseBranch  string // Base branch to branch from
+	InitCommand string // Command to run after creating worktree
 }
 
 // InstanceStatus represents the current status of an instance.
@@ -128,6 +129,16 @@ func (m *Manager) CreateInstance(opts CreateOpts) (*state.Instance, error) {
 		return nil, fmt.Errorf("failed to capture PID: %w", err)
 	}
 	pid := panes[0].PID
+
+	// Run init command if specified
+	if opts.InitCommand != "" {
+		if err := m.tmux.SendKeys(windowID, opts.InitCommand); err != nil {
+			// Cleanup on failure
+			_ = m.tmux.KillWindow(windowID)
+			_ = m.git.WorktreeRemove(worktreePath, true)
+			return nil, fmt.Errorf("failed to run init command: %w", err)
+		}
+	}
 
 	// Create instance record
 	now := time.Now()

@@ -18,6 +18,7 @@ var newCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		branchName := args[0]
 		baseBranch, _ := cmd.Flags().GetString("base")
+		templateName, _ := cmd.Flags().GetString("template")
 
 		// Get current working directory
 		cwd, err := os.Getwd()
@@ -52,6 +53,19 @@ var newCmd = &cobra.Command{
 			return fmt.Errorf("failed to create workspace manager: %w", err)
 		}
 
+		// Apply template if specified
+		var initCommand string
+		if templateName != "" {
+			if template, ok := cfg.Workspace.Templates[templateName]; ok {
+				if baseBranch == "" {
+					baseBranch = template.BaseBranch
+				}
+				initCommand = template.InitCommand
+			} else {
+				return fmt.Errorf("template %q not found in config", templateName)
+			}
+		}
+
 		// Use default base branch if not provided
 		if baseBranch == "" {
 			baseBranch = cfg.Workspace.BaseBranch
@@ -59,9 +73,10 @@ var newCmd = &cobra.Command{
 
 		// Create instance
 		opts := workspace.CreateOpts{
-			Name:       branchName,
-			Branch:     branchName,
-			BaseBranch: baseBranch,
+			Name:        branchName,
+			Branch:      branchName,
+			BaseBranch:  baseBranch,
+			InitCommand: initCommand,
 		}
 
 		instance, err := mgr.CreateInstance(opts)
@@ -83,5 +98,6 @@ var newCmd = &cobra.Command{
 
 func init() {
 	newCmd.Flags().StringP("base", "b", "", "Base branch to branch from (default: from config)")
+	newCmd.Flags().StringP("template", "t", "", "Template to apply (overrides base branch and runs init command)")
 	rootCmd.AddCommand(newCmd)
 }
