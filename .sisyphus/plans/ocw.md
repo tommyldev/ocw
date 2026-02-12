@@ -877,7 +877,7 @@ Wave 6 (Polish + Post-MVP):
 
 ### WAVE 4: TUI Views & Features
 
-- [ ] 6. Dashboard View (Complete)
+- [x] 6. Dashboard View (Complete)
 
   **What to do**:
   - Enhance `internal/tui/views/dashboard.go` from skeleton (Task 6a) to use real data:
