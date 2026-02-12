@@ -31,7 +31,6 @@ type App struct {
 	err       error
 }
 
-// NewApp creates a new App instance
 func NewApp(ctx *Context) *App {
 	app := &App{
 		ctx:       ctx,
@@ -45,7 +44,6 @@ func NewApp(ctx *Context) *App {
 		err:       nil,
 	}
 
-	// Load instances from state
 	if ctx.Manager != nil {
 		stateData, err := ctx.Manager.Store().Load()
 		if err == nil && stateData != nil {
@@ -53,8 +51,17 @@ func NewApp(ctx *Context) *App {
 		}
 	}
 
-	// Initialize dashboard view
-	app.dashboard = views.NewDashboard(app.instances)
+	statusStyles := views.StatusStyles{
+		Active:   app.styles.StatusActiveStyle,
+		Idle:     app.styles.StatusIdleStyle,
+		Paused:   app.styles.StatusPausedStyle,
+		Error:    app.styles.StatusErrorStyle,
+		Merged:   app.styles.StatusMergedStyle,
+		Done:     app.styles.StatusDoneStyle,
+		Conflict: app.styles.ConflictWarning,
+	}
+
+	app.dashboard = views.NewDashboard(app.instances, statusStyles)
 
 	return app
 }
@@ -143,7 +150,6 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return a, nil
 }
 
-// refreshInstances reloads instances from state
 func (a *App) refreshInstances() (tea.Model, tea.Cmd) {
 	if a.ctx.Manager != nil {
 		stateData, err := a.ctx.Manager.Store().Load()
@@ -153,7 +159,16 @@ func (a *App) refreshInstances() (tea.Model, tea.Cmd) {
 		}
 		if stateData != nil {
 			a.instances = stateData.Instances
-			a.dashboard = views.NewDashboard(a.instances)
+			statusStyles := views.StatusStyles{
+				Active:   a.styles.StatusActiveStyle,
+				Idle:     a.styles.StatusIdleStyle,
+				Paused:   a.styles.StatusPausedStyle,
+				Error:    a.styles.StatusErrorStyle,
+				Merged:   a.styles.StatusMergedStyle,
+				Done:     a.styles.StatusDoneStyle,
+				Conflict: a.styles.ConflictWarning,
+			}
+			a.dashboard = views.NewDashboard(a.instances, statusStyles)
 			a.dashboard.SetSize(a.width, a.height)
 		}
 	}

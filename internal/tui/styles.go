@@ -10,6 +10,15 @@ type Styles struct {
 	StatusError   string
 	StatusPending string
 
+	// Status colors
+	StatusActiveStyle lipgloss.Style
+	StatusIdleStyle   lipgloss.Style
+	StatusPausedStyle lipgloss.Style
+	StatusErrorStyle  lipgloss.Style
+	StatusMergedStyle lipgloss.Style
+	StatusDoneStyle   lipgloss.Style
+	ConflictWarning   lipgloss.Style
+
 	// Colors
 	FocusedBorder  lipgloss.Style
 	BlurredBorder  lipgloss.Style
@@ -31,6 +40,35 @@ func DefaultStyles() Styles {
 		StatusStopped: "○",
 		StatusError:   "✗",
 		StatusPending: "◐",
+
+		// Status colors (green/yellow/gray/red/blue/cyan)
+		StatusActiveStyle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("46")). // green
+			Bold(true),
+
+		StatusIdleStyle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("226")). // yellow
+			Bold(true),
+
+		StatusPausedStyle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("240")). // gray
+			Bold(true),
+
+		StatusErrorStyle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("196")). // red
+			Bold(true),
+
+		StatusMergedStyle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("33")). // blue
+			Bold(true),
+
+		StatusDoneStyle: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("51")). // cyan
+			Bold(true),
+
+		ConflictWarning: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("226")). // yellow
+			Bold(true),
 
 		// Focused border
 		FocusedBorder: lipgloss.NewStyle().
