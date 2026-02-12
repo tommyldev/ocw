@@ -11,6 +11,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/tommyzliu/ocw/internal/state"
+	"github.com/tommyzliu/ocw/internal/tmux"
+	"github.com/tommyzliu/ocw/internal/workspace"
 )
 
 // InstanceItem wraps state.Instance for list rendering
@@ -198,17 +200,23 @@ type Dashboard struct {
 	selectedIndex  int
 	refreshTicker  *time.Ticker
 	conflictTicker *time.Ticker
+	manager        *workspace.Manager
+	previewContent string
+	lastPreviewIdx int
 }
 
-func NewDashboard(instances []state.Instance, statusStyles StatusStyles) *Dashboard {
+func NewDashboard(instances []state.Instance, statusStyles StatusStyles, manager *workspace.Manager) *Dashboard {
 	d := &Dashboard{
-		instances:     instances,
-		width:         80,
-		height:        24,
-		statusStyles:  statusStyles,
-		lastRefresh:   time.Now(),
-		lastConflict:  time.Now(),
-		selectedIndex: 0,
+		instances:      instances,
+		width:          80,
+		height:         24,
+		statusStyles:   statusStyles,
+		lastRefresh:    time.Now(),
+		lastConflict:   time.Now(),
+		selectedIndex:  0,
+		manager:        manager,
+		previewContent: "",
+		lastPreviewIdx: -1,
 	}
 
 	items := make([]list.Item, len(instances))
@@ -270,6 +278,7 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			items[i] = InstanceItem{instance: inst}
 		}
 		d.list.SetItems(items)
+		d.updatePreview()
 		return d, d.tickRefresh()
 
 	case ConflictCheckMsg:
@@ -280,8 +289,10 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "up", "k":
 			d.list.CursorUp()
+			d.updatePreview()
 		case "down", "j":
 			d.list.CursorDown()
+			d.updatePreview()
 		}
 
 	case tea.WindowSizeMsg:
@@ -291,6 +302,39 @@ func (d *Dashboard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	d.list, cmd = d.list.Update(msg)
 	return d, cmd
+}
+
+func (d *Dashboard) updatePreview() {
+	currentIdx := d.list.Index()
+
+	if currentIdx == d.lastPreviewIdx && d.previewContent != "" {
+		return
+	}
+
+	d.lastPreviewIdx = currentIdx
+
+	if currentIdx < 0 || currentIdx >= len(d.instances) || d.manager == nil {
+		d.previewContent = ""
+		return
+	}
+
+	inst := d.instances[currentIdx]
+
+	paneTarget := fmt.Sprintf("%s:%s", d.manager.SessionName(), inst.TmuxWindow)
+	tmuxClient := tmux.NewTmux()
+	content, err := tmuxClient.CapturePaneContent(paneTarget)
+	if err != nil {
+		d.previewContent = fmt.Sprintf("(Unable to capture output: %v)", err)
+		return
+	}
+
+	lines := strings.Split(strings.TrimSpace(content), "\n")
+	maxLines := 15
+	if len(lines) > maxLines {
+		lines = lines[len(lines)-maxLines:]
+	}
+
+	d.previewContent = strings.Join(lines, "\n")
 }
 
 func (d *Dashboard) View() string {
@@ -303,13 +347,49 @@ func (d *Dashboard) View() string {
 		Foreground(lipgloss.Color("240")).
 		Padding(0, 1)
 
+	previewStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("240")).
+		Padding(0, 1).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("240"))
+
 	header := headerStyle.Render("OCW - Open Code Workspace")
 
 	listView := d.list.View()
 
+	d.updatePreview()
+
+	var previewSection string
+	if d.previewContent != "" {
+		selectedIdx := d.list.Index()
+		if selectedIdx >= 0 && selectedIdx < len(d.instances) {
+			selectedName := d.instances[selectedIdx].Name
+			previewHeader := fmt.Sprintf("Preview: %s", selectedName)
+			previewBox := previewStyle.Render(d.previewContent)
+			previewSection = lipgloss.JoinVertical(
+				lipgloss.Left,
+				previewHeader,
+				previewBox,
+			)
+		}
+	}
+
 	footer := footerStyle.Render(
 		fmt.Sprintf("Total instances: %d | Press ? for help | Press q to quit", len(d.instances)),
 	)
+
+	if previewSection != "" {
+		return lipgloss.JoinVertical(
+			lipgloss.Left,
+			header,
+			"",
+			listView,
+			"",
+			previewSection,
+			"",
+			footer,
+		)
+	}
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,

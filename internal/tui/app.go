@@ -106,7 +106,7 @@ func NewApp(ctx *Context) *App {
 		Conflict: app.styles.ConflictWarning,
 	}
 
-	app.dashboard = views.NewDashboard(app.instances, statusStyles)
+	app.dashboard = views.NewDashboard(app.instances, statusStyles, ctx.Manager)
 
 	// Initialize create view
 	createStyles := views.CreateStyles{
@@ -562,7 +562,7 @@ func (a *App) refreshInstances() (tea.Model, tea.Cmd) {
 				Done:     a.styles.StatusDoneStyle,
 				Conflict: a.styles.ConflictWarning,
 			}
-			a.dashboard = views.NewDashboard(a.instances, statusStyles)
+			a.dashboard = views.NewDashboard(a.instances, statusStyles, a.ctx.Manager)
 			a.dashboard.SetSize(a.width, a.height)
 		}
 	}

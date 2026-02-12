@@ -1885,7 +1885,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 23. Instance Output Preview/Streaming in Dashboard
+- [x] 23. Instance Output Preview/Streaming in Dashboard
 
   **What to do**:
   - Add a preview pane on the right side of dashboard (like claude-squad's tabbed preview):
