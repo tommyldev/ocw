@@ -20,6 +20,16 @@ const (
 	StateDiff      AppState = "diff"
 )
 
+// FocusMsg is sent when user wants to focus on an instance
+type FocusMsg struct {
+	InstanceIndex int
+}
+
+// FocusCompleteMsg is sent after focus returns to dashboard
+type FocusCompleteMsg struct {
+	Error error
+}
+
 // App is the root Bubbletea model
 type App struct {
 	ctx       *Context
@@ -34,6 +44,7 @@ type App struct {
 	create    *views.Create
 	diff      *views.Diff
 	err       error
+	program   *tea.Program
 }
 
 func NewApp(ctx *Context) *App {
@@ -47,6 +58,7 @@ func NewApp(ctx *Context) *App {
 		width:     80,
 		height:    24,
 		err:       nil,
+		program:   nil,
 	}
 
 	if ctx.Manager != nil {
@@ -82,6 +94,11 @@ func NewApp(ctx *Context) *App {
 	app.create = views.NewCreate(ctx.Manager, defaultBase, createStyles)
 
 	return app
+}
+
+// SetProgram sets the tea.Program reference for terminal control
+func (a *App) SetProgram(p *tea.Program) {
+	a.program = p
 }
 
 // Init initializes the app
@@ -125,6 +142,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.diff = model.(*views.Diff)
 			return a, cmd
 		}
+	case FocusCompleteMsg:
+		if msg.Error != nil {
+			a.err = msg.Error
+		}
+		return a, nil
 	}
 
 	// Delegate to current view
@@ -234,6 +256,20 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				return a, a.diff.Init()
 			}
 		}
+	case "enter":
+		if a.state == StateDashboard && a.dashboard != nil {
+			selectedIdx := a.dashboard.GetSelectedIndex()
+			if selectedIdx >= 0 && selectedIdx < len(a.instances) {
+				return a, a.focusInstance(selectedIdx)
+			}
+		}
+	case "1", "2", "3", "4", "5", "6", "7", "8", "9":
+		if a.state == StateDashboard {
+			idx := int(msg.String()[0] - '0' - 1)
+			if idx >= 0 && idx < len(a.instances) {
+				return a, a.focusInstance(idx)
+			}
+		}
 	case "esc":
 		if a.state == StateCreate {
 			a.state = StateDashboard
@@ -283,6 +319,41 @@ func (a *App) refreshInstances() (tea.Model, tea.Cmd) {
 		}
 	}
 	return a, nil
+}
+
+func (a *App) focusInstance(instanceIndex int) tea.Cmd {
+	return func() tea.Msg {
+		if instanceIndex < 0 || instanceIndex >= len(a.instances) {
+			return FocusCompleteMsg{Error: fmt.Errorf("invalid instance index")}
+		}
+
+		instance := a.instances[instanceIndex]
+
+		if a.ctx.Manager == nil {
+			return FocusCompleteMsg{Error: fmt.Errorf("manager not available")}
+		}
+
+		sessionName, err := a.ctx.Manager.EnsureSession()
+		if err != nil {
+			return FocusCompleteMsg{Error: fmt.Errorf("failed to get session name: %w", err)}
+		}
+
+		if a.program == nil {
+			return FocusCompleteMsg{Error: fmt.Errorf("program not available")}
+		}
+
+		if err := a.program.ReleaseTerminal(); err != nil {
+			return FocusCompleteMsg{Error: fmt.Errorf("failed to release terminal: %w", err)}
+		}
+
+		err = a.ctx.Manager.Tmux().AttachWindow(sessionName, instance.TmuxWindow)
+
+		if restoreErr := a.program.RestoreTerminal(); restoreErr != nil {
+			return FocusCompleteMsg{Error: fmt.Errorf("failed to restore terminal: %w", restoreErr)}
+		}
+
+		return FocusCompleteMsg{Error: err}
+	}
 }
 
 // renderHelp renders the help screen
