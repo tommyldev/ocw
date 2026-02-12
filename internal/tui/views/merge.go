@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -9,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/tommyzliu/ocw/internal/git"
 	"github.com/tommyzliu/ocw/internal/state"
+	"github.com/tommyzliu/ocw/internal/tmux"
 	"github.com/tommyzliu/ocw/internal/workspace"
 )
 
@@ -36,6 +38,7 @@ type Merge struct {
 	manager           *workspace.Manager
 	conflictDetector  *workspace.ConflictDetector
 	gitManager        *git.Git
+	tmuxClient        *tmux.Tmux
 	form              *huh.Form
 	prTitle           string
 	prBody            string
@@ -63,11 +66,12 @@ type MergeStyles struct {
 }
 
 // NewMerge creates a new Merge view
-func NewMerge(instance state.Instance, manager *workspace.Manager, gitManager *git.Git, styles MergeStyles) *Merge {
+func NewMerge(instance state.Instance, manager *workspace.Manager, gitManager *git.Git, tmuxClient *tmux.Tmux, styles MergeStyles) *Merge {
 	m := &Merge{
 		instance:          instance,
 		manager:           manager,
 		gitManager:        gitManager,
+		tmuxClient:        tmuxClient,
 		conflictDetector:  workspace.NewConflictDetector(gitManager),
 		width:             80,
 		height:            24,
@@ -76,7 +80,7 @@ func NewMerge(instance state.Instance, manager *workspace.Manager, gitManager *g
 		merging:           false,
 		// Default PR title: format branch name
 		prTitle: formatBranchNameForPR(instance.Branch),
-		prBody:  "",
+		prBody:  generatePRDescriptionFromActivity(instance, tmuxClient),
 	}
 
 	m.buildForm()
@@ -102,6 +106,125 @@ func formatBranchNameForPR(branch string) string {
 	}
 
 	return branch
+}
+
+func generatePRDescriptionFromActivity(instance state.Instance, tmuxClient *tmux.Tmux) string {
+	if tmuxClient == nil || instance.TmuxWindow == "" {
+		return ""
+	}
+
+	openCodePaneTarget := fmt.Sprintf("%s.0", instance.TmuxWindow)
+	scrollback, err := tmuxClient.CapturePaneScrollback(openCodePaneTarget)
+	if err != nil {
+		return ""
+	}
+
+	activities := parseScrollbackActivity(scrollback)
+	if len(activities) == 0 {
+		return ""
+	}
+
+	var description strings.Builder
+	description.WriteString("## Changes\n")
+	description.WriteString("Auto-generated from OpenCode activity:\n\n")
+
+	for _, activity := range activities {
+		description.WriteString(fmt.Sprintf("- %s\n", activity))
+	}
+
+	return description.String()
+}
+
+func parseScrollbackActivity(scrollback string) []string {
+	if scrollback == "" {
+		return nil
+	}
+
+	lines := strings.Split(scrollback, "\n")
+	activities := []string{}
+	seenActivities := make(map[string]bool)
+	maxActivities := 10
+
+	meaningfulPatterns := struct {
+		fileChanges *regexp.Regexp
+		errorFixes  *regexp.Regexp
+		actions     *regexp.Regexp
+	}{
+		fileChanges: regexp.MustCompile(`(?i)(created|modified|updated|added|deleted|fixed|removed)\s+[\w/.-]+\.(go|js|ts|py|rb|java|css|html|md|yml|yaml|json|txt|sh)`),
+		errorFixes:  regexp.MustCompile(`(?i)(fixed|resolved|corrected)\s+.*?(error|bug|issue|problem)`),
+		actions:     regexp.MustCompile(`(?i)(implemented|added|created|built|configured|setup|installed|integrated)`),
+	}
+
+	noisePatterns := []*regexp.Regexp{
+		regexp.MustCompile(`^\s*$`),
+		regexp.MustCompile(`^[\d:/-]+\s*$`),
+		regexp.MustCompile(`^(\x1b\[[0-9;]*m)*\s*$`),
+		regexp.MustCompile(`(?i)^(ls|cd|pwd|cat|echo)`),
+		regexp.MustCompile(`^[>$#]\s*$`),
+	}
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		if isNoiseLine(line, noisePatterns) {
+			continue
+		}
+
+		activity := extractActivity(line, meaningfulPatterns)
+		if activity == "" {
+			continue
+		}
+
+		normalizedActivity := normalizeActivity(activity)
+		if len(normalizedActivity) > 10 && !seenActivities[normalizedActivity] {
+			seenActivities[normalizedActivity] = true
+			activities = append(activities, normalizedActivity)
+
+			if len(activities) >= maxActivities {
+				break
+			}
+		}
+	}
+
+	return activities
+}
+
+func isNoiseLine(line string, noisePatterns []*regexp.Regexp) bool {
+	for _, pattern := range noisePatterns {
+		if pattern.MatchString(line) {
+			return true
+		}
+	}
+	return false
+}
+
+func extractActivity(line string, patterns struct {
+	fileChanges *regexp.Regexp
+	errorFixes  *regexp.Regexp
+	actions     *regexp.Regexp
+}) string {
+	if patterns.fileChanges.MatchString(line) {
+		return patterns.fileChanges.FindString(line)
+	}
+
+	if patterns.errorFixes.MatchString(line) {
+		return patterns.errorFixes.FindString(line)
+	}
+
+	if patterns.actions.MatchString(line) && len(line) > 30 {
+		return line
+	}
+
+	return ""
+}
+
+func normalizeActivity(activity string) string {
+	activity = strings.TrimSpace(activity)
+	activity = strings.Trim(activity, ".,;:!?")
+	return activity
 }
 
 // Init initializes the merge view

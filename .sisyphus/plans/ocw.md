@@ -1940,7 +1940,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 26. Auto-Generate PR Descriptions from OpenCode Activity
+- [x] 26. Auto-Generate PR Descriptions from OpenCode Activity
 
   **What to do**:
   - Capture opencode pane history on merge

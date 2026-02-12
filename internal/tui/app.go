@@ -416,7 +416,7 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					Help:       a.styles.Footer,
 					FormBorder: a.styles.FocusedBorder,
 				}
-				a.merge = views.NewMerge(selectedInstance, a.ctx.Manager, gitMgr, mergeStyles)
+				a.merge = views.NewMerge(selectedInstance, a.ctx.Manager, gitMgr, a.ctx.Manager.Tmux(), mergeStyles)
 				a.merge.SetSize(a.width, a.height)
 				a.state = StateMerge
 				return a, a.merge.Init()
