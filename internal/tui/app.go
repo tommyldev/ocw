@@ -14,6 +14,7 @@ type AppState string
 const (
 	StateDashboard AppState = "dashboard"
 	StateDetail    AppState = "detail"
+	StateCreate    AppState = "create"
 	StateHelp      AppState = "help"
 )
 
@@ -28,6 +29,7 @@ type App struct {
 	width     int
 	height    int
 	dashboard *views.Dashboard
+	create    *views.Create
 	err       error
 }
 
@@ -63,6 +65,19 @@ func NewApp(ctx *Context) *App {
 
 	app.dashboard = views.NewDashboard(app.instances, statusStyles)
 
+	// Initialize create view
+	createStyles := views.CreateStyles{
+		Title:      app.styles.Header,
+		Error:      app.styles.ErrorText,
+		Help:       app.styles.Footer,
+		FormBorder: app.styles.FocusedBorder,
+	}
+	defaultBase := "main"
+	if ctx.Config != nil && ctx.Config.Workspace.BaseBranch != "" {
+		defaultBase = ctx.Config.Workspace.BaseBranch
+	}
+	app.create = views.NewCreate(ctx.Manager, defaultBase, createStyles)
+
 	return app
 }
 
@@ -84,7 +99,19 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.dashboard != nil {
 			a.dashboard.SetSize(msg.Width, msg.Height)
 		}
+		if a.create != nil {
+			a.create.SetSize(msg.Width, msg.Height)
+		}
 		return a, nil
+	case views.CreateMsg:
+		// Handle create completion
+		if msg.Error != nil {
+			a.err = msg.Error
+			return a, nil
+		}
+		// Success - return to dashboard
+		a.state = StateDashboard
+		return a.refreshInstances()
 	}
 
 	// Delegate to current view
@@ -93,6 +120,12 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if a.dashboard != nil {
 			model, cmd := a.dashboard.Update(msg)
 			a.dashboard = model.(*views.Dashboard)
+			return a, cmd
+		}
+	case StateCreate:
+		if a.create != nil {
+			model, cmd := a.create.Update(msg)
+			a.create = model.(*views.Create)
 			return a, cmd
 		}
 	}
@@ -112,6 +145,11 @@ func (a *App) View() string {
 			return a.dashboard.View()
 		}
 		return "Loading..."
+	case StateCreate:
+		if a.create != nil {
+			return a.create.View()
+		}
+		return "Loading..."
 	case StateHelp:
 		return a.renderHelp()
 	default:
@@ -127,6 +165,8 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "?":
 		if a.state == StateDashboard {
 			a.state = StateHelp
+		} else if a.state == StateCreate {
+			a.state = StateDashboard
 		} else {
 			a.state = StateDashboard
 		}
@@ -134,6 +174,29 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "r":
 		if a.state == StateDashboard {
 			return a.refreshInstances()
+		}
+	case "n":
+		if a.state == StateDashboard {
+			a.state = StateCreate
+			// Reset create form
+			defaultBase := "main"
+			if a.ctx.Config != nil && a.ctx.Config.Workspace.BaseBranch != "" {
+				defaultBase = a.ctx.Config.Workspace.BaseBranch
+			}
+			createStyles := views.CreateStyles{
+				Title:      a.styles.Header,
+				Error:      a.styles.ErrorText,
+				Help:       a.styles.Footer,
+				FormBorder: a.styles.FocusedBorder,
+			}
+			a.create = views.NewCreate(a.ctx.Manager, defaultBase, createStyles)
+			a.create.SetSize(a.width, a.height)
+			return a, nil
+		}
+	case "esc":
+		if a.state == StateCreate {
+			a.state = StateDashboard
+			return a, nil
 		}
 	}
 
@@ -143,6 +206,12 @@ func (a *App) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if a.dashboard != nil {
 			model, cmd := a.dashboard.Update(msg)
 			a.dashboard = model.(*views.Dashboard)
+			return a, cmd
+		}
+	case StateCreate:
+		if a.create != nil {
+			model, cmd := a.create.Update(msg)
+			a.create = model.(*views.Create)
 			return a, cmd
 		}
 	}
