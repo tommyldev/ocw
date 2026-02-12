@@ -422,7 +422,7 @@ Wave 6 (Polish + Post-MVP):
 
 ### WAVE 2: Core Infrastructure
 
-- [ ] 2. State & Config Management
+- [x] 2. State & Config Management
 
   **What to do**:
   - Create `internal/config/config.go`:
@@ -550,7 +550,7 @@ Wave 6 (Polish + Post-MVP):
 
 ---
 
-- [ ] 4. tmux Abstraction Layer
+- [x] 4. tmux Abstraction Layer
 
   **What to do**:
   - Create `internal/tmux/tmux.go`:
